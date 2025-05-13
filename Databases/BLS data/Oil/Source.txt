@@ -1,0 +1,8 @@
+U.S. Bureau of Labor Statistics
+PPI Crude Petroleum: https://data.bls.gov/pdq/SurveyOutputServlet
+
+Gross Domestic Product: Chain-type Price Index (GDPCTPI)
+https://fred.stlouisfed.org/series/GDPCTPI
+
+
+

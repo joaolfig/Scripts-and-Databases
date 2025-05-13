@@ -1,0 +1,24 @@
+Oil (qual usar? Brench?)(Usei o mesmo que o Wolfers, crude petroleum PPI, deflated using chain GDP deflator):
+https://data.bls.gov/pdq/SurveyOutputServlet
+Crude Petroleum PPI, nos Top Picked indicators do site do BLS
+
+
+Desemprego:
+https://www.bea.gov/data
+
+House prices inflation:
+https://www.fhfa.gov/data/hpi
+
+Income growth:
+https://www.bea.gov/data
+
+Eleições do Executivo Estadual EUA:
+(49 Estados, falta Alaska) https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/DGUMFI
+https://www.icpsr.umich.edu/web/ICPSR/studies/13
+
+(Lista de governadores independentes e third-party) https://en.wikipedia.org/wiki/List_of_third-party_and_independent_United_States_state_governors#Post-Reconstruction_(1865%E2%80%93present)
+(Election Results Alaska) https://en.wikipedia.org/wiki/Elections_in_Alaska
+https://en.wikipedia.org/wiki/List_of_governors_of_Alaska
+
+Aprovação do Governador:
+SEAD 1 - State Executive Approval Dataset - https://dataverse.harvard.edu/dataverse/sead
