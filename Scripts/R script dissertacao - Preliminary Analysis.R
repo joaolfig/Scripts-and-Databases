@@ -4,7 +4,7 @@ library(estimatr)
 library(texreg)
 library(stargazer)
 
-setwd("C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts and Databases")
+setwd("C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts-and-Databases")
 getwd()
 
 rm(list=ls())

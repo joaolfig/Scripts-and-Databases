@@ -4,7 +4,7 @@ library(tidyr)
 
 #rm(list=ls())
 
-setwd("C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts and Databases")
+setwd("C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts-and-Databases")
 
 oil_consumption_raw <- readxl::read_excel("Databases/EIA Energy Information Administration/use_pet_capita.xlsx", sheet = 2, skip = 1)
 

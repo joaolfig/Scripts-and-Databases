@@ -4,7 +4,7 @@ library(estimatr)
 library(texreg)
 library(stargazer)
 
-setwd("C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts and Databases")
+setwd("C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts-and-Databases")
 
 rm(list=ls())
 
@@ -43,8 +43,7 @@ df_analysis$gov_presi_same_party <- ifelse(df_analysis$incumbent_party == df_ana
 df_analysis <- merge(df_analysis, employment_states_gap[,c('state','year','employment_gap','employment_gap_change','employment_gap_national','employment_gap_change_national','competence_employment')], by = c('state','year'), all.x = TRUE)
 
 #left join with Oil data
-df_analysis <- merge(df_analysis, oil_deflated[,c('year','log_oil_deflated_change')], by = c('year'), all.x = TRUE)
-
+df_analysis <- merge(df_analysis, oil_deflated[,c('year','oil','oil_deflated','log_oil_deflated_change')], by = c('year'), all.x = TRUE)
 
 #left join with BSF data
 df_analysis <- merge(df_analysis, BSF_dataset[,c('state','year','BSF_implementation'
@@ -55,7 +54,13 @@ df_analysis$incumbent_party <- ifelse(df_analysis$incumbent_party == 'Democratic
 
 ############### Summary Statistics #######################################
 
+colnames(df_analysis)
 
+summary(lm(competence_employment ~ lag(oil):state ,data=df_analysis[df_analysis$year >= 1993 & df_analysis$year <= 2016,]))
+
+summary(lm(competence_employment ~ lag(oil):state ,data=df_analysis[df_analysis$year >= 1989 & df_analysis$year <= 2020,]))
+
+summary(lm(competence_employment ~ state ,data=df_analysis[df_analysis$year >= 1989 & df_analysis$year <= 2020,]))
 
 
 

@@ -4,7 +4,7 @@ library(tidyverse)
 
 #rm(list=ls())
 
-setwd('C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts and Databases/Databases/Replication Files for Garro (2021)')
+setwd('C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts-and-Databases/Databases/Replication Files for Garro (2021)')
 getwd()
 
 

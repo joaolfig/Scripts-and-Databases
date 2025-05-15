@@ -2,7 +2,7 @@ library(readxl)
 
 #rm(list=ls())
 
-setwd("C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts and Databases")
+setwd("C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts-and-Databases")
 
 #Read CSV Databases/BSF Data/BSF strictness Wagner 2005.xlsx
 BSF_rules <- read_excel("Databases/BSF Data/BSF strictness Wagner 2005.xlsx", sheet = "BSF strictness data")

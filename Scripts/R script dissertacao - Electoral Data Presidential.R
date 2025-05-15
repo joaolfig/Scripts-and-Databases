@@ -5,7 +5,7 @@ library(dplyr)
 #rm(list=ls())
 
 #set working directory
-setwd("C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts and Databases")
+setwd("C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts-and-Databases")
 
 president_incumbent <- read.csv("Databases/US Election Results Executive/Presidentes_EUA_Wikipedia.csv", header = TRUE, sep = ";")
 

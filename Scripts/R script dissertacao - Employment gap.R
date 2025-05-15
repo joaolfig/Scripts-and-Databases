@@ -5,7 +5,7 @@ library(stringr)
 
 #rm(list=ls())
 
-setwd("C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts and Databases")
+setwd("C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts-and-Databases")
 
 employment <- read.csv("Databases/BLS Data/Employment/Annual/Employment_Nonfarm_US_National_Annual.csv", header = TRUE, sep = ",")
 unemployment <- read.csv("Databases/BLS Data/Employment/Annual/Unemployment_Rate_US_National_Annual.csv", header = TRUE, sep = ",")
