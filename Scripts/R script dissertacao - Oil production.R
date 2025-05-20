@@ -27,7 +27,7 @@ colnames(oil_production_raw) <- gsub(" Field Production of Crude Oil \\(Thousand
 
 # drop columns with PADD in their name
 oil_production_raw <- oil_production_raw %>%
-  select(-contains("PADD"))
+  dplyr::select(-dplyr::contains("PADD"))
 colnames(oil_production_raw)
 
 # Sum up columns "Alaska", "Alaska South", and "Alaska North Slope Crude Oil Production (Thousand Barrels)"
@@ -53,14 +53,14 @@ oil_production$Year <- format(oil_production$Date, "%Y")
 # State name in both columns is in column "State", and the code is in column "State_Code"
 oil_production <- oil_production %>%
   left_join(us_2letters_code, by = c("State" = "State")) %>%
-  select(-State) %>%
+  dplyr::select(-State) %>%
   rename(State = State_Code)
 
 ############### Merge columns
 #Merge columns by Year and State Join such that consumption has all its columns
 oil_data <- oil_consumption %>%
   left_join(oil_production, by = c("Year", "State")) %>%
-  select(-Date)
+  dplyr::select(-Date)
 
 #omit rows with NA using NA omit
 oil_data <- na.omit(oil_data)

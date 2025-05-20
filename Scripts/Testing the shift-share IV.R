@@ -1,6 +1,10 @@
 library(haven)
 library(dplyr)
 library(tidyverse)
+library(texreg) # Screenreg
+library(ivreg) # IV
+library(AER) # Mostra se a IV é boa
+library(QuantPsyc) # LM com standardized beta coefficients
 
 rm(list=ls())
 
@@ -60,4 +64,61 @@ df_iv %>%
 
 #Check min and max values for year using summary
 summary(as.numeric(df_iv$year))
+
+
+#merge df_garro with employment_states_gap by state and year
+
+employment_states_gap$year <- as.numeric(employment_states_gap$year)
+
+data <- df_garro %>%
+  left_join(employment_states_gap, by = c("st" = "state", "year" = "year"))
+
+#Table 3 Garro (2021)
+screenreg(lm( log(gsppc)
+             ~lag(log(oilprice))
+             +factor(stateno)
+             +factor(year)
+             ,data=data %>%filter(year > 1996))
+          ,omit.coef = "stateno|year"
+          ,digits=3)
+
+#Table '4 Garro (2021)
+summary(
+  ivreg(pol_polar
+        ~ log(gsppc) 
+        | lag(log(oilprice),2) + factor(stateno) + factor(year)
+        ,data=data
+  )
+  ,diagnostics = TRUE
+)
+  
+# Minhas ideias
+summary(
+  ivreg(
+    employment_gap 
+    ~ log(gsppc) #+ log(oilprice)  #+ factor(stateno) + factor(year)
+    | lag(log(oilprice),2) #+ factor(stateno) + factor(year)
+    ,data=data 
+  )
+  ,omit.coef = "stateno|year"
+  ,diagnostic=TRUE)
+
+summary(
+  ivreg(
+    log(gsppc)
+    ~ employment_gap
+    | lag(log(oilprice),2)
+    ,data=data 
+  )
+  ,diagnostic=TRUE)
+
+summary(
+  ivreg(
+    employment_gap
+    ~ log(gsppc)
+    | lag(log(oilprice)):reserves
+    ,data=data 
+  )
+  ,diagnostic=TRUE)
+
 

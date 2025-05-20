@@ -48,3 +48,5 @@ oil_deflated$oil_deflated <- round(oil_deflated$oil * oil_deflated$deflator_mult
 oil_deflated$log_oil_deflated <- log(oil_deflated$oil_deflated)
 
 oil_deflated$log_oil_deflated_change <- oil_deflated$log_oil_deflated - lag(oil_deflated$log_oil_deflated, 2)
+
+

@@ -1,8 +1,10 @@
+library(haven)
 library(stringr)
 library(dplyr)
-library(estimatr)
-library(texreg)
-library(stargazer)
+library(texreg) # Screenreg
+library(ivreg) # IV
+library(AER) # Mostra se a IV é boa
+library(QuantPsyc) # LM com standardized beta coefficients
 
 setwd("C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts-and-Databases")
 
@@ -14,10 +16,14 @@ source('Scripts/R script dissertacao - Electoral Data Presidential.R')
 source('Scripts/R script dissertacao - Employment gap.R')
 source('Scripts/R script dissertacao - Oil prices.R')
 source('Scripts/R script dissertacao - BSF Data.R')
+source('Scripts/R script dissertacao - State Approval.R')
+
+df_garro <- read_dta("Databases/Replication Files for Garro (2021)/polar_main_dataset.dta")
 
 rm(list=setdiff(ls(), c("vote_state",'president_incumbent_ts'
                         ,"employment_states_gap","oil_deflated"
-                        ,"BSF_rules",'BSF_dataset')))
+                        ,"BSF_rules",'BSF_dataset','df_garro'
+                        ,'df_approval_qtr','df_approval_annual')))
 
 ############### Merge Column and create variables ###############
 # Merge all data into one dataframe
@@ -52,40 +58,48 @@ df_analysis <- merge(df_analysis, BSF_dataset[,c('state','year','BSF_implementat
 
 df_analysis$incumbent_party <- ifelse(df_analysis$incumbent_party == 'Democratic', 1, 0)
 
-############### Summary Statistics #######################################
+#rename st to state in df_garro
+df_garro <- df_garro %>%
+  rename(state = st)
+df_garro <- df_garro[,c('state','year','oilprice','reserves','gsp','gsppc')]
+df_garro$oilprice_lag1 <- lag(df_garro$oilprice, 1)
+df_garro$oilprice_lag2 <- lag(df_garro$oilprice, 2)
+df_garro$gsp_lag1 <- lag(df_garro$gsp, 1)
+df_garro$gsp_lag2 <- lag(df_garro$gsp, 2)
+
+df_analysis <- merge(df_analysis, df_garro, by = c('state','year'), all.x = TRUE)
+
+#merge with df_approval_annual
+df_approval_annual$year <- as.numeric(df_approval_annual$year)
+
+df_analysis <- merge(df_analysis, df_approval_annual[,c('state','year','Approval_Not_Smoothed','Approval_Not_Smoothed_lag1','Approval_Not_Smoothed_lag2')], by = c('state','year'), all.x = TRUE)
 
 colnames(df_analysis)
+############### Analysis #######################################
 
-summary(lm(competence_employment ~ lag(oil):state ,data=df_analysis[df_analysis$year >= 1993 & df_analysis$year <= 2016,]))
-
-summary(lm(competence_employment ~ lag(oil):state ,data=df_analysis[df_analysis$year >= 1989 & df_analysis$year <= 2020,]))
-
-summary(lm(competence_employment ~ state ,data=df_analysis[df_analysis$year >= 1989 & df_analysis$year <= 2020,]))
-
+screenreg(lm(incumbent_running ~
+       + Approval_Not_Smoothed_lag1
+       + year + state,
+     data = df_analysis), omit = "state|year",)
 
 
-############### EXOGENOUS OIL EFFECT ON POLITICAL OUTCOMES ############### 
+screenreg(lm(reelection_candidate ~
+             + incumbent_party
+             + Approval_Not_Smoothed_lag1
+             + midterm_punishment
+             + year + state,
+             data = df_analysis[df_analysis$incumbent_party == 1,]
+             ), omit = "state|year",)
 
-m_oil_on_running <- lm(incumbent_running~log_oil_deflated_change:state + lag(log_oil_deflated_change):state,data=df_analysis)
 
-m_oil_on_voteshare <- lm(incumbent_pct_2pty_change ~ log_oil_deflated_change + lag(log_oil_deflated_change),data=df_analysis[df_analysis$incumbent_running == 1,])
-m_oil_on_reelection <- lm(reelection_candidate~log_oil_deflated_change + lag(log_oil_deflated_change),data=df_analysis[df_analysis$incumbent_running == 1,])
-m_oil_on_reelection_pty <- lm(reelection_party~log_oil_deflated_change + lag(log_oil_deflated_change),data=df_analysis[df_analysis$incumbent_running == 1,])
-
-# With Fixed Effects
-m_oil_on_running_FE <- lm(incumbent_running~log_oil_deflated_change + lag(log_oil_deflated_change) + state + year,data=df_analysis)
-
-m_oil_on_voteshare_FE <- lm(incumbent_pct_2pty_change ~ log_oil_deflated_change + lag(log_oil_deflated_change) + state + year,data=df_analysis[df_analysis$incumbent_running == 1,])
-m_oil_on_reelection_FE <- lm(reelection_candidate~log_oil_deflated_change + lag(log_oil_deflated_change) + state + year,data=df_analysis[df_analysis$incumbent_running == 1,])
-m_oil_on_reelection_pty_FE <- lm(reelection_party~log_oil_deflated_change + lag(log_oil_deflated_change) + state + year,data=df_analysis[df_analysis$incumbent_running == 1,])
-
-screenreg(list(m_oil_on_running, m_oil_on_voteshare, m_oil_on_reelection, m_oil_on_reelection_pty,
-                  m_oil_on_running_FE, m_oil_on_voteshare_FE, m_oil_on_reelection_FE, m_oil_on_reelection_pty_FE),
-          omit.coef = "lag|state|year", stars = c(0.001, 0.01, 0.05))
-
-############### Analysis of the Data #####################################
-
-screenreg(list(m1, h1sca,h1scb,h1scc), omit.coef = "year|state")
+screenreg(lm(Approval_Not_Smoothed ~
+             + Approval_Not_Smoothed_lag1  
+             + incumbent_party
+             + gov_presi_same_party
+#             + midterm_punishment
+             + oilprice_lag1
+             + year + state
+             ,data = df_analysis), omit = "state|year",)
 
 
 
