@@ -3,6 +3,8 @@ library(readxl)
 #rm(list=ls())
 
 setwd("C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts-and-Databases")
+#setwd("C:/Users/b435097/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts-and-Databases")
+
 
 #Read CSV Databases/BSF Data/BSF strictness Wagner 2005.xlsx
 BSF_rules <- read_excel("Databases/BSF Data/BSF strictness Wagner 2005.xlsx", sheet = "BSF strictness data")
@@ -24,7 +26,10 @@ state_year <- merge(state_year, BSF_rules, by = c('state','year'), all.x = TRUE)
 state_year <- state_year %>% group_by(state) %>% fill(everything())
 state_year$BSF_implementation <- ifelse(is.na(state_year$Deposit_strictness), 0, 1)
 
-BSF_dataset <- state_year[,c('state','year','BSF_implementation','Deposit_strictness','Withdrawal_strictness')]
+BSF_dataset <- state_year #[,c('state','year','BSF_implementation','Deposit_strictness','Withdrawal_strictness')]
 
 #group by state year and fill NA upward
 BSF_dataset <- BSF_dataset %>% group_by(state) %>% fill(everything(), .direction = "up")
+
+# Make NA in any column into 0
+BSF_dataset[is.na(BSF_dataset)] <- 0

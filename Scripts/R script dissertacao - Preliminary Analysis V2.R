@@ -5,10 +5,12 @@ library(texreg) # Screenreg
 library(ivreg) # IV
 library(AER) # Mostra se a IV é boa
 library(QuantPsyc) # LM com standardized beta coefficients
+library(tableone)
+library(marginaleffects)
 
 setwd("C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts-and-Databases")
 
-rm(list=ls())
+#rm(list=ls())
 
 ############### Load Data ################
 source('Scripts/R script dissertacao - Electoral Data Gubernatorial.R')
@@ -17,8 +19,7 @@ source('Scripts/R script dissertacao - Employment gap.R')
 source('Scripts/R script dissertacao - Oil prices.R')
 source('Scripts/R script dissertacao - BSF Data.R')
 source('Scripts/R script dissertacao - State Approval.R')
-
-df_garro <- read_dta("Databases/Replication Files for Garro (2021)/polar_main_dataset.dta")
+source('Scripts/R script dissertacao - Garro (2021).R')
 
 rm(list=setdiff(ls(), c("vote_state",'president_incumbent_ts'
                         ,"employment_states_gap","oil_deflated"
@@ -56,50 +57,57 @@ df_analysis <- merge(df_analysis, BSF_dataset[,c('state','year','BSF_implementat
                                                  ,'Deposit_strictness','Withdrawal_strictness')]
                      , by = c('state','year'), all.x = TRUE)
 
-df_analysis$incumbent_party <- ifelse(df_analysis$incumbent_party == 'Democratic', 1, 0)
-
-#rename st to state in df_garro
-df_garro <- df_garro %>%
-  rename(state = st)
-df_garro <- df_garro[,c('state','year','oilprice','reserves','gsp','gsppc')]
-df_garro$oilprice_lag1 <- lag(df_garro$oilprice, 1)
-df_garro$oilprice_lag2 <- lag(df_garro$oilprice, 2)
-df_garro$gsp_lag1 <- lag(df_garro$gsp, 1)
-df_garro$gsp_lag2 <- lag(df_garro$gsp, 2)
-
-df_analysis <- merge(df_analysis, df_garro, by = c('state','year'), all.x = TRUE)
-
-#merge with df_approval_annual
-df_approval_annual$year <- as.numeric(df_approval_annual$year)
-
+#left join with df_approval_annual
 df_analysis <- merge(df_analysis, df_approval_annual[,c('state','year','Approval_Not_Smoothed','Approval_Not_Smoothed_lag1','Approval_Not_Smoothed_lag2')], by = c('state','year'), all.x = TRUE)
 
-colnames(df_analysis)
+#left join with df_garro
+df_analysis <- merge(df_analysis, df_garro[,c('state','year','oilprice','lagloggsppc'
+                                              
+                                              
+                                              ,'lag2logoil_iv_two')], by = c('state','year'), all.x = TRUE)
+
+
+#df_analysis <- merge(df_analysis, df_garro, by = c('state','year'), all.x = TRUE)
+#where df_analysis$dm_garro == NA, 0
+#df_analysis$dm_garro[is.na(df_analysis$dm_garro)] <- 0
+
+
+# Create vars
+df_analysis$incumbent_party <- ifelse(df_analysis$incumbent_party == 'Democratic', 1, 0)
+
 ############### Analysis #######################################
 
-screenreg(lm(incumbent_running ~
-       + Approval_Not_Smoothed_lag1
-       + year + state,
-     data = df_analysis), omit = "state|year",)
+m1 <- lm(reelection_candidate~
+   log_oil_deflated_change*state + factor(year)
+  ,data=df_analysis[df_analysis$incumbent_running==1,]
+)
 
+m2 <- lm(reelection_candidate~
+           +log_oil_deflated_change*BSF_implementation
+           +log_oil_deflated_change*state + factor(year)
+         ,data=df_analysis[df_analysis$incumbent_running==1,]
+)
 
-screenreg(lm(reelection_candidate ~
-             + incumbent_party
-             + Approval_Not_Smoothed_lag1
-             + midterm_punishment
-             + year + state,
-             data = df_analysis[df_analysis$incumbent_party == 1,]
-             ), omit = "state|year",)
+m3 <- lm(reelection_candidate~
+           +log_oil_deflated_change*Deposit_strictness
+         +log_oil_deflated_change*state + factor(year)
+         ,data=df_analysis[df_analysis$incumbent_running==1,]
+)
 
+m4 <- lm(reelection_candidate~
+           +log_oil_deflated_change*Withdrawal_strictness
+         +log_oil_deflated_change*state + factor(year)
+         ,data=df_analysis[df_analysis$incumbent_running==1,]
+)
 
-screenreg(lm(Approval_Not_Smoothed ~
-             + Approval_Not_Smoothed_lag1  
-             + incumbent_party
-             + gov_presi_same_party
-#             + midterm_punishment
-             + oilprice_lag1
-             + year + state
-             ,data = df_analysis), omit = "state|year",)
+screenreg(list(m1,m2,m3,m4),omit.coef = "state|year",digits=3)
 
+plot_predictions(m1,condition = c("log_oil_deflated_change"))
+plot_predictions(m2,condition = c("log_oil_deflated_change"
+                                  ,"BSF_implementation"))
+plot_predictions(m3,condition = c("log_oil_deflated_change"
+                                  ,"Deposit_strictness"))
+plot_predictions(m4,condition = c("log_oil_deflated_change"
+                                  ,"Withdrawal_strictness"))
 
-
+colnames(df_analysis)
