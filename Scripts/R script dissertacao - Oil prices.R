@@ -1,5 +1,6 @@
 library(dplyr)
 library(tidyverse)
+library(zoo)  # para yearqtr
 
 #rm(list=ls())
 
@@ -52,7 +53,7 @@ oil_deflated$oil_deflated <- round(oil_deflated$oil * oil_deflated$deflator_mult
 
 oil_deflated$log_oil_deflated <- log(oil_deflated$oil_deflated)
 
-oil_deflated$log_oil_deflated_change <- oil_deflated$log_oil_deflated - lag(oil_deflated$log_oil_deflated, 2)
+oil_deflated$log_oil_deflated_change <- oil_deflated$log_oil_deflated - dplyr::lag(oil_deflated$log_oil_deflated, 2)
 
 
 # Aggregate oil variables
@@ -99,6 +100,8 @@ oil_qtr <- left_join(oil_qtr, deflator_qtr[,c("year","quarter","deflator_multipl
 
 oil_qtr$oil_deflated_qtr <- round(oil_qtr$oil_qtr_avg * oil_qtr$deflator_multiplier,2)
 
+oil_qtr$quarter_year <- as.yearqtr(paste(oil_qtr$year, oil_qtr$quarter), format = "%Y %q")
+
 
 #Plot both oil_qtr$oil_deflated_qtr and oil_qtr_avg
 library(ggplot2)
@@ -113,21 +116,94 @@ ggplot(oil_qtr, aes(x = year, y = oil_deflated_qtr)) +
 
 #### Oil fluctuation in percentage
 # In percentage
-oil_qtr$oil_diff_percent <- (oil_qtr$oil_qtr_avg - lag(oil_qtr$oil_qtr_avg))/lag(oil_qtr$oil_qtr_avg)
+oil_qtr$oil_diff_percent <- (oil_qtr$oil_qtr_avg - dplyr::lag(oil_qtr$oil_qtr_avg))/dplyr::lag(oil_qtr$oil_qtr_avg)
 
-oil_qtr$oil_deflated_fst_diff <- oil_qtr$oil_deflated_qtr - lag(oil_qtr$oil_deflated_qtr)
+oil_qtr$oil_deflated_fst_diff <- oil_qtr$oil_deflated_qtr - dplyr::lag(oil_qtr$oil_deflated_qtr)
 
 
 ####Measurement of oilshock
-oil_qtr$oil_qrt_shock_positive <- ifelse(oil_qtr$oil_deflated_fst_diff <  
-                                           (mean(oil_qtr$oil_deflated_fst_diff, na.rm = TRUE) 
-                                            + (2*sd(oil_qtr$oil_deflated_fst_diff, na.rm = TRUE)) )
-                                         ,0,1)
+m <- mean(oil_qtr$oil_deflated_fst_diff, na.rm = TRUE)
+s <- sd(oil_qtr$oil_deflated_fst_diff, na.rm = TRUE)
 
-oil_qtr$oil_qrt_shock_negative <- ifelse(oil_qtr$oil_deflated_fst_diff >  
-                                           (mean(oil_qtr$oil_deflated_fst_diff, na.rm = TRUE) 
-                                            - (2*sd(oil_qtr$oil_deflated_fst_diff, na.rm = TRUE)) )
-                                         ,0,1)
+m_pct <- mean(oil_qtr$oil_diff_percent, na.rm = TRUE)
+s_pct <- sd(oil_qtr$oil_diff_percent, na.rm = TRUE)
+
+# Create oil shock variables
+oil_qtr <- oil_qtr %>%
+            mutate(oil_shock_positive = 
+                pmax(0,100 * log(oil_qtr_avg / pmax(
+                dplyr::lag(oil_qtr_avg, 2), 
+                dplyr::lag(oil_qtr_avg, 3),
+                dplyr::lag(oil_qtr_avg, 4),
+                dplyr::lag(oil_qtr_avg, 5))), na.rm = TRUE)
+                  ,oil_shock_negative = 
+                pmin(0,100 * log(oil_qtr_avg / pmin(
+                dplyr::lag(oil_qtr_avg, 2), 
+                dplyr::lag(oil_qtr_avg, 3),
+                dplyr::lag(oil_qtr_avg, 4),
+                dplyr::lag(oil_qtr_avg, 5))), na.rm = TRUE)
+            )
+
+# Create lag variables for oil shocks
+oil_qtr <- oil_qtr %>%
+  mutate(oil_shock_positive_l1 = dplyr::lag(oil_shock_positive, 1),
+         oil_shock_positive_l2 = dplyr::lag(oil_shock_positive, 2),
+         oil_shock_positive_l3 = dplyr::lag(oil_shock_positive, 3),
+         oil_shock_positive_l4 = dplyr::lag(oil_shock_positive, 4),
+         oil_shock_negative_l1 = dplyr::lag(oil_shock_negative, 1),
+         oil_shock_negative_l2 = dplyr::lag(oil_shock_negative, 2),
+         oil_shock_negative_l3 = dplyr::lag(oil_shock_negative, 3),
+         oil_shock_negative_l4 = dplyr::lag(oil_shock_negative, 4))
+
+oil_qtr <- oil_qtr %>%
+  mutate(oil_qtr_avg_l1 = dplyr::lag(oil_qtr_avg, 1),
+         oil_qtr_avg_l2 = dplyr::lag(oil_qtr_avg, 2),
+         oil_qtr_avg_l3 = dplyr::lag(oil_qtr_avg, 3),
+         oil_qtr_avg_l4 = dplyr::lag(oil_qtr_avg, 4))
 
 
+# oil_qtr$oil_qrt_shock_positive <- ifelse(oil_qtr$oil_deflated_fst_diff >= m + 1.5*s, 1, 0)
+# oil_qtr$oil_qrt_shock_negative <- ifelse(oil_qtr$oil_deflated_fst_diff <= m - 1.5*s, 1, 0)
+# oil_qtr$oil_qrt_shock_positive_2 <- ifelse(oil_qtr$oil_deflated_fst_diff >= m + 2*s, 1, 0)
+# oil_qtr$oil_qrt_shock_negative_2 <- ifelse(oil_qtr$oil_deflated_fst_diff <= m - 2*s, 1, 0)
+# oil_qtr$oil_qrt_shock_positive_pct_1.5 <- ifelse(oil_qtr$oil_diff_percent >= m_pct + 1.5*s_pct, 1, 0)
+# oil_qtr$oil_qrt_shock_negative_pct_1.5 <- ifelse(oil_qtr$oil_diff_percent <= m_pct - 1.5*s_pct, 1, 0)
+# oil_qtr$oil_qrt_shock_positive_pct_2 <- ifelse(oil_qtr$oil_diff_percent >= m_pct + 2*s_pct, 1, 0)
+# oil_qtr$oil_qrt_shock_negative_pct_2 <- ifelse(oil_qtr$oil_diff_percent <= m_pct - 2*s_pct, 1, 0)
 
+
+#plot a line plot of oil prices_deflted with a scatter of shocks
+# ggplot(oil_qtr, aes(x = time, y = oil_deflated_fst_diff)) +
+#   geom_line(color = "blue") +
+#   geom_point(data = subset(oil_qtr, oil_qrt_shock_positive_1.5 == 1), aes(y = oil_deflated_fst_diff), color = "green", size = 1.5) +
+#   geom_point(data = subset(oil_qtr, oil_qrt_shock_negative_1.5 == 1), aes(y = oil_deflated_fst_diff), color = "red", size = 1.5) +
+#   labs(title = "Oil Price Shocks",
+#        x = "Quarter",
+#        y = "Oil Price (2017 US dollars)") +
+#   theme_minimal()
+# 
+# ggplot(oil_qtr, aes(x = time, y = oil_deflated_fst_diff)) +
+#   geom_line(color = "blue") +
+#   geom_point(data = subset(oil_qtr, oil_qrt_shock_positive_2 == 1), aes(y = oil_deflated_fst_diff), color = "green", size = 1.5) +
+#   geom_point(data = subset(oil_qtr, oil_qrt_shock_negative_2 == 1), aes(y = oil_deflated_fst_diff), color = "red", size = 1.5) +
+#   labs(title = "Oil Price Shocks",
+#        x = "Quarter",
+#        y = "Oil Price (2017 US dollars)") +
+#   theme_minimal()
+# 
+# ggplot(oil_qtr, aes(x = time, y = oil_diff_percent)) +
+#   geom_line(color = "blue") +
+#   geom_point(data = subset(oil_qtr, oil_qrt_shock_positive_pct_1.5 == 1), aes(y = oil_diff_percent), color = "green", size = 1.5) +
+#   geom_point(data = subset(oil_qtr, oil_qrt_shock_negative_pct_1.5 == 1), aes(y = oil_diff_percent), color = "red", size = 1.5) +
+#   labs(title = "Oil Price Shocks",
+#        x = "Quarter",
+#        y = "Percentage") +
+#   theme_minimal()
+# ggplot(oil_qtr, aes(x = time, y = oil_diff_percent)) +
+#   geom_line(color = "blue") +
+#   geom_point(data = subset(oil_qtr, oil_qrt_shock_positive_pct_2 == 1), aes(y = oil_diff_percent), color = "green", size = 1.5) +
+#   geom_point(data = subset(oil_qtr, oil_qrt_shock_negative_pct_2 == 1), aes(y = oil_diff_percent), color = "red", size = 1.5) +
+#   labs(title = "Oil Price Shocks",
+#        x = "Quarter",
+#        y = "Percentage") +
+#   theme_minimal()

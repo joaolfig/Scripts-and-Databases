@@ -1,0 +1,1340 @@
+---
+title: "Wallace"
+author: "Wallace Cordeiro"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T,
+                      warning = F,
+                      message = F)
+
+setwd("/Users/Wallace/Desktop/Tese")
+```
+
+```{r libraries}
+library(tidyverse)
+library(texreg)
+library(reshape2)
+library(dplyr)
+library(stringr)
+library(lubridate)
+library(corrplot)
+library(car)
+library(corrgram)
+library(forecast)
+library(stargazer)
+library(Hmisc)
+library(zoo)
+library(dynlm)
+library(broom)
+library(knitr)
+library(lmtest)
+library(tseries)
+library(fUnitRoots)
+library(urca)
+library(modelsummary)
+source("/Users/Wallace/Desktop/Tese/Data/unit_resp_adl.R")
+```
+
+# Commodities
+
+## Old commodities treatment
+
+###Processing data
+
+```{r}
+comm_old <- read.csv("/Users/Wallace/Desktop/Tese/Data/us_monthlycommoditypriceindicesaverages_10570542104077_longold.csv", skip = 1, fileEncoding = "LATIN1")[-1,]
+
+#reorganizing and subsetting the old file
+comm_old <- comm_old %>% 
+    rename(period=PRODUCT,
+           comindex_current=Price.index...All.groups..in.terms.of.current.dollars.,
+           comindex_constant=Price.Index...All.groups..in.terms.of.constant.dollars.,
+           minerals=MINERALS..ORES.AND.METALS) %>% 
+    mutate(period=as.Date(paste0("01",period), format = "%d%b%Y"))      %>% 
+    select(period,comindex_current,comindex_constant,minerals)
+```
+
+## New Commodities treatment
+
+### Processing data
+
+Carregar arquivos e leve processamento
+
+```{r}
+comm_new <- read.csv("/Users/Wallace/Desktop/Tese/Data/us_commoditypriceindices_m_10600761997378_longnew.csv", skip = 1, fileEncoding = "LATIN1")[-1,]
+
+#reorganizing and subsetting the new file
+comm_new <- comm_new %>%
+  rename(period=PRODUCT,
+         comindex = All.groups,
+         minerals=X..Minerals..ores.and.metals,
+         minerals_nonprecious=X....Minerals..ores.and.non.precious.metals) %>% 
+  mutate(period=as.Date(paste0("01",gsub("\\.?\\s","",gsub("June","Jun.",period))), format = "%d%b%Y"))  %>% 
+  select(period,comindex,minerals,minerals_nonprecious)
+```
+
+## Merging all together
+
+```{r}
+comm <- merge(comm_old, comm_new, by = "period", all = T, suffixes = c("old",""))
+
+comm$year <- year(comm$period)
+comm$quarter <- quarter(comm$period)
+comm$month <- month(comm$period)
+```
+
+### Correlogram new series
+
+```{r}
+plot(comm$period,comm$mineralsold,type="l",bty="n",ylab="",xlab="")
+lines(comm$period,comm$minerals,col=gray(0.5),lty=2)
+lines(comm$period,comm$minerals_nonprecious,col=gray(0.5),lty=3)
+legend(x="topleft",
+       legend=c("Minerals (old)","Minerals (new)","Minerals & Non-Precious (new)"),
+       lty=c(1,2,3),
+       col=c(1,gray(0.5),gray(0.5)),
+       bty="n")
+
+#coorelation coefficients
+par(mar=c(1,1,1,1))
+corrgram(subset(comm,select=c(comindex,comindex_current,
+                              mineralsold,minerals,minerals_nonprecious)),
+         upper.panel="panel.cor")
+
+```
+
+# Harmozining Old and New (minerals)
+
+## Regressing the series
+
+```{r}
+the.reg <- lm(mineralsold~minerals_nonprecious, data=comm)#predict old index based on new index
+pred <- predict(the.reg,newdata=data.frame(minerals_nonprecious=comm$minerals_nonprecious))
+```
+
+# Plot the series (only since 1990)
+
+```{r}
+par(mar=c(2,2,1,1))
+start.plot <- which(comm$period=="1990-01-01")
+plot(comm$period[start.plot:nrow(comm)],
+     comm$mineralsold[start.plot:nrow(comm)]
+     ,type="l",bty="n",ylab="",xlab="",ylim=c(0,500))
+lines(comm$period[start.plot:nrow(comm)],
+      comm$minerals_nonprecious[start.plot:nrow(comm)],col=gray(0.5),lty=3)
+lines(comm$period[start.plot:nrow(comm)],
+      pred[start.plot:nrow(comm)],col=3)
+legend(x="topleft",
+       legend=c("Minerals (old)","Minerals & Non-Precious (new)","Predicted minerals"),
+       lty=c(1,2,1),
+       col=c(1,gray(0.5),3),
+       bty="n")
+
+dev.copy(png, "/Users/Wallace/Desktop/Tese/Graphs/harmonized series.png")
+dev.off()
+```
+
+## Creating new variable with the entire series
+
+```{r}
+comm$minerals_h <- ifelse(is.na(comm$mineralsold),
+                          pred,comm$mineralsold)
+
+```
+
+Plot of the series old, new and harmonized
+
+```{r}
+comm %>% 
+    pivot_longer(c(minerals_nonprecious, minerals, minerals_h)) %>% 
+    ggplot(aes(x = period, y = value, color = name)) +
+    geom_point()
+
+comm %>% 
+    ggplot(aes(x = period, y = minerals_h)) +
+    geom_point() 
+
+# CZ's plot
+plot(comm$period,comm$minerals_h,type="l",lty=2,bty="n",xlab="",ylab="Index")
+lines(comm$period,comm$mineralsold,col=gray(0.5))
+lines(comm$period,comm$minerals_nonprecious,col=2)
+
+dev.copy(png, "/Users/Wallace/Desktop/Tese/Graphs/oldandnewseries.png")
+dev.off()
+```
+
+# HoS Approval Rates
+
+```{r}
+ead <- read.csv("/Users/Wallace/Desktop/Tese/Data/EAD 3.0 Beta Quarterly_07192023.csv")
+
+#Separando o dados que quero
+# Filter country
+ead_c <- filter(ead, Country == "Australia")
+
+#Creating columns with year and quarter
+ead_c$year <- as.numeric(substr(ead_c$qtr, 1, 4))
+ead_c$quarter <- as.numeric(substr(ead_c$qtr, 6, 6))
+
+# Filter year
+ead_c$year <- as.numeric(ead_c$year)
+
+# Select only columns that we care about
+ead_c <- select(ead_c, c(Country, qtr, Approval_Smoothed, year, quarter))
+
+ead_c <- ead_c %>%
+        select(Country, Approval_Smoothed, qtr, year, quarter) %>%
+        rename(ead = Approval_Smoothed)
+
+```
+
+## Correlation between ead 2 and 3
+```{r}
+ead2 <- read.csv("/Users/Wallace/Desktop/Tese/Data/EAD+2.0+quarter+101019.csv")
+ead2 <- filter(ead2, Country == "Australia")
+ead2 <- ead2 %>%
+        select(Country, qtr, Approval_Smoothed)
+        names(ead2) <- c("country", "qtr", "ead2")
+        
+ead3 <- read.csv("/Users/Wallace/Desktop/Tese/Data/EAD 3.0 Beta Quarterly_07192023.csv")
+ead3 <- filter(ead3, Country == "Australia")
+ead3 <- ead3 %>%
+        select(country_name, qtr, Approval_Smoothed)
+        names(ead3) <- c("country", "qtr", "ead3")
+
+eadcorr <- merge(ead2, ead3, by = c("qtr", "country"))      
+corrgram(eadcorr, upper.panel = "panel.cor")
+
+```
+
+
+# Election and Head of Government
+
+```{r}
+leader <- read.csv("/Users/Wallace/Desktop/Tese/Data/leader_list_8_21 (1).csv")
+leader <- filter(leader, stateabb == "AUL")
+leader <- select(leader, stateabb, leader, sdate, smonth, syear, emonth, eyear)
+leader$date <- as.Date(paste(leader$syear, leader$smonth, leader$sdate, sep = "-"))
+leader$quarter <- quarter(leader$date)
+#leader$qtr <- paste(leader$syear, leader$quarter, sep = "-") #num precisa mais
+leader <- select(leader, leader, syear, quarter)
+names(leader) <- c("leader", "year", "quarter")
+
+election <- read.csv("/Users/Wallace/Desktop/Tese/Data/election_list_8_21.csv")
+election <- election [, -(1:2)]
+election <- filter(election, country == "Australia")
+election$day <- ifelse(is.na(election$elec_day) | election$elec_day == "", 1, election$elec_day)
+election$date <- as.Date(paste(election$elec_year, election$elec_month, election$day, sep = "-"))
+election$quarter <- quarter(election$date)
+election <- select(election, elec_year, quarter, event, victory, change)
+names(election) <- c("year", "quarter", "type", "victory", "change")
+
+```
+
+# Domestic Variables
+
+## GDP Growth
+
+```{r}
+gdp <- readxl::read_xlsx("/Users/Wallace/Desktop/Tese/Data/5206001_Key_Aggregates.xlsx", sheet = "Data1",skip = 9)
+#gdp <- gdp[-c(1:9), ] ##remove the tag rows 
+#moved this line above to "skip" in the previous one, so that it reads as date and numeric, respectively
+gdp <- gdp[, c(1, 2)] ##just the gdp growth rate
+names(gdp) <- c("date", "gdp_growth")
+#gdp$date <- as.Date.numeric(as.numeric(gdp$date), origin = "1900-01-01")
+
+gdp$year <- year(gdp$date) ##cria coluna com o mês numericamente
+gdp$month <- month(gdp$date) ##cria coluna com o ano numericamente
+gdp$quarter <- quarter(gdp$date) ##cria coluna com o quarter numericamente 
+
+# you don't need day and date! you can merge by year and quarter, later!
+```
+
+## Inflation
+
+```{r}
+inf <- readxl::read_xlsx("/Users/Wallace/Desktop/Tese/Data/640101.xlsx", sheet = "Data1", skip = 9)
+#inf <- inf[-c(1:9), ] ##remove tag rows
+inf <- inf[, c(1, 28)] ##just the column with the inflation
+names(inf) <- c("date", "inflation")
+#inf$date <- as.Date.numeric(as.numeric(inf$date), origin = "1900-01-01")
+
+inf$year <- year(inf$date) ##cria coluna com o mês numericamente
+inf$month <- month(inf$date) ##cria coluna com o ano numericamente
+inf$quarter <- quarter(inf$date) ##cria quarter 
+
+```
+
+## Unemployment rate MONTHLY
+
+```{r}
+unemp <- readxl::read_xlsx("/Users/Wallace/Desktop/Tese/Data/6202001.xlsx", sheet = "Data1")
+unemp <- unemp[-c(1:9), ] ##remove the tag rows 
+unemp <- unemp[, c(1, 65)] ##just the column with the percentage of unemployed 
+names(unemp) <- c("date", "unemployment")
+unemp$date <- as.Date.numeric(as.numeric(unemp$date), origin = "1900-01-01")
+
+unemp$year <- year(unemp$date) ##cria coluna com o mês numericamente
+unemp$month <- month(unemp$date) ##cria coluna com o ano numericamente
+unemp$quarter <- quarter(unemp$date) ##cria coluna com o quarter
+
+unemp$unemployment <- as.numeric(unemp$unemployment)
+```
+
+
+## Graphs
+```{r}
+domestic <- list(inf, gdp, unemp)
+domestic <- Reduce(function(x, y) merge(x, y, by = c("year", "month", "quarter")), domestic)
+
+domestic$inflation <- as.numeric(domestic$inflation)
+domestic$gdp_growth <- as.numeric(domestic$gdp_growth)
+domestic$unemployment <- as.numeric(domestic$unemployment)
+
+domestic %>%
+ggplot(aes(x = year, y = gdp_growth)) +
+geom_point() +
+geom_smooth() +
+theme_bw() + 
+xlab("year") + 
+ylab("GDP Growth")
+ggsave("gdp.jpeg", width = 9, height = 6)
+
+all_data %>%
+filter(year >= 1969) %>%
+ggplot(aes(x = year, y = ead)) +
+geom_point() +
+geom_smooth() +
+theme_bw() + 
+xlab("year") + 
+ylab("Popularity")
+ggsave("pop.jpeg", width = 9, height = 6)
+```
+
+
+# Merging all QUARTERLY data
+
+```{r}
+# Create a list of the three quarterly data frames
+# Keeping only the relevant variables
+quarterly <- list(subset(inf,select=c(inflation,year,quarter)), 
+                  subset(gdp,select=c(gdp_growth,year,quarter)),
+                  subset(leader,select=c(leader,year,quarter)),
+                  subset(election,select=c(type,victory,change,year,quarter)),
+                  subset(ead_c,select=c(ead,year,quarter)))
+              
+quarterly <- Reduce(function(x, y) merge(x, y, by = c("year", "quarter")
+                                         , all = TRUE), quarterly)
+
+quarterly$qtr <- paste(quarterly$year,quarterly$quarter,sep="-")
+
+quarterly <- quarterly %>%
+  fill(leader, .direction = "down")
+
+quarterly <- quarterly %>%
+  mutate(election = ifelse(type == "Vote, As Scheduled" | type == "Vote, Early", 1, 0),
+         election = ifelse(is.na(type), 0, election))
+
+quarterly <- quarterly %>%
+  mutate(early_vote = ifelse(type %in% c("Vote, Early"), 1, 0))
+
+quarterly <- quarterly %>%
+  rename(changeb = change)
+
+quarterly <- quarterly %>%
+  mutate(change = ifelse(leader == lag(leader), 0, 1))
+
+quarterly <- quarterly %>%
+  group_by(leader) %>%
+  mutate(counter = ifelse(!is.na(leader), row_number(), NA))
+
+
+
+```
+
+# Merging all MONTHLY data and agreggating by quarter
+
+```{r}
+# Create a list of the monthly data frames
+# Keeping only the relevant variables
+monthly <- list(subset(unemp,select=c(unemployment,month,year,quarter)), 
+                  subset(comm,select=c(minerals_h,month,year,quarter)))
+monthly <- Reduce(function(x, y) merge(x, y, by = c("year","quarter","month")
+                                         , all = TRUE), monthly)             
+monthly$qtr <- paste(monthly$year,monthly$quarter,sep="-")
+
+monthly_by_quarter <- monthly %>%
+	        group_by(qtr) %>%
+	        summarise(unemployment = mean(unemployment,na.rm=T),
+	                  minerals_h = mean(minerals_h,na.rm=T))
+```
+
+# Merging the two data sets
+
+```{r}
+all_data <- merge(quarterly,monthly_by_quarter,by=c("qtr"),all=T)
+save(all_data,file="data_wallace.RData")
+
+corrgram(subset(all_data,
+                select=c(inflation,gdp_growth,unemployment,
+                          ead, minerals_h)))
+
+```
+
+# Corrgrams
+```{r}
+cordata <- all_data
+cordata <- cordata[c("qtr", "year", "quarter", "inflation", "gdp_growth", "ead", "unemployment", "minerals_h", "minerals_d", "minerals_dpct", "okun_misery")]
+names(cordata) <- c("qtr", "year", "quarter", "Inflation", "GDP_Growth", "Popularity", "Unemployment", "Commodityh", "Commoditydif", "Commodity_per", "Misery_Index")
+
+datapre <- subset(cordata, year <2000)
+corrgram(subset(datapre,select=c(Commodity_per,Misery_Index,GDP_Growth,Popularity))
+         , main = "Pre-2000")
+
+dev.copy(png, "/Users/Wallace/Desktop/Tese/Graphs/corrokunprior.png")
+dev.off()
+
+datapos <- subset(cordata, year >=2000)
+corrgram(subset(datapos,select=c(Commodity_per,Misery_Index,GDP_Growth,Popularity))
+         , main = "Post-2000")
+
+dev.copy(png, "/Users/Wallace/Desktop/Tese/Graphs/corrokunpost.png")
+dev.off()
+
+corrgram(subset(cordata,
+                select=c(Inflation,GDP_Growth,Unemployment,
+                          Popularity, Commodityh)))
+dev.copy(png, "/Users/Wallace/Desktop/Tese/Graphs/mineralsHdom.png")
+dev.off()
+
+corrgram(subset(cordata,
+                select=c(Inflation,GDP_Growth,Unemployment,
+                          Popularity, Commoditydif)))
+dev.copy(png, "/Users/Wallace/Desktop/Tese/Graphs/mineralsDdom.png")
+dev.off()
+
+corrgram(subset(cordata,
+                select=c(Inflation,GDP_Growth,Unemployment,
+                          Popularity, Commodity_per)))
+dev.copy(png, "/Users/Wallace/Desktop/Tese/Graphs/mineralsDPCTdom.png")
+dev.off()
+
+```
+
+
+# Creating diffs and lags
+
+```{r}
+# Lags para executive approval e para commodity price
+all_data$ead_lag1  <- Lag(all_data$ead, shift = 1)
+all_data$ead_lag2  <- Lag(all_data$ead, shift = 2)
+all_data$minerals_h_lag1  <- Lag(all_data$minerals_h, shift = 1)
+all_data$minerals_h_lag2  <- Lag(all_data$minerals_h, shift = 2)
+
+all_data$minerals_d <- c(NA,diff(all_data$minerals_h))
+
+all_data$minerals_dpct <- c(NA, diff(all_data$minerals_h)/
+                              all_data$minerals_h[-nrow(all_data)]) * 100
+all_data$minerals_dpct_lag1  <- Lag(all_data$minerals_dpct, shift = 1)
+all_data$minerals_dpct_lag2  <- Lag(all_data$minerals_dpct, shift = 2)
+
+all_data$hm <- all_data$counter<=2
+
+# Lags para domestic variables
+all_data$inflation_lag1  <- Lag(all_data$inflation, shift = 1)
+all_data$inflation_lag2  <- Lag(all_data$inflation, shift = 2)
+
+all_data$unemployment_lag1  <- Lag(all_data$unemployment, shift = 1)
+all_data$unemployment_lag2  <- Lag(all_data$unemployment, shift = 2)
+
+all_data$gdp_growth_lag1  <- Lag(all_data$gdp_growth, shift = 1)
+all_data$gdp_growth_lag2  <- Lag(all_data$gdp_growth, shift = 2)
+
+# Okum Misery Index
+all_data$okun_misery <- all_data$inflation + all_data$unemployment
+all_data$okun_misery_lag1  <- Lag(all_data$okun_misery, shift = 1)
+all_data$okun_misery_lag2  <- Lag(all_data$okun_misery, shift = 2)
+
+
+saveRDS(all_data, "datawallace.rds")
+```
+
+
+# Primary results
+```{r}
+approvalall <- lm(ead ~ minerals_dpct, data = all_data)
+approval <- lm(ead ~ unemployment + gdp_growth + inflation, data = all_data)
+
+punemp <- lm(unemployment ~ minerals_dpct, data = all_data)
+pgdp <- lm(gdp_growth ~ minerals_dpct, data = all_data)
+pinf <- lm(inflation ~ minerals_dpct, data = all_data)
+
+stargazer(approvalall,
+          title = "Executive Approval x Commodity Prices",
+          align = TRUE, out = "primaryapprovalxcomm.tex", type = "latex")
+
+stargazer(approval,
+          title = "Executive Approval influenced by Domestic Variables",
+          align = TRUE, out = "primaryapproval.tex", type = "latex")
+
+stargazer(punemp, pgdp, pinf,
+          title = "Domestic Economy Variables and Commodity Prices",
+          align = TRUE, out = "primarydomcomm.tex", type = "latex")
+```
+
+```{r}
+# Examine by PM term ####
+by_pm <- all_data %>%
+             group_by(leader) %>%
+                summarise(
+                  start = min(year),
+                  in_office = n(),
+                  av_growth = mean(gdp_growth,na.rm=T),
+                  av_inflation = mean(inflation,na.rm=T),
+                  av_unemployment = mean(unemployment,na.rm=T),
+                  av_minerals = mean(minerals_h,na.rm=T),
+                  av_dminerals = mean(minerals_dpct,na.rm=T),
+                  av_pop = mean(ead,na.rm=T)) %>% 
+             arrange(start)
+
+by_pm <- subset(by_pm,in_office>1)
+par(mfrow=c(1,2))
+#plot(by_pm$av_minerals,by_pm$av_pop,cex=by_pm$in_office/20,
+#      xlab="Average Minerals",ylab="Average Popularity")
+#abline(reg=lm(av_pop~av_minerals,data=by_pm,weights=in_office))
+plot(by_pm$av_dminerals,by_pm$av_pop,cex=by_pm$in_office/20,
+     xlab="Average Pct Change in Minerals",ylab="Average Popularity")
+abline(reg=lm(av_pop~av_dminerals,data=by_pm,weights=in_office))
+
+dev.copy(png, "/Users/Wallace/Desktop/Tese/Graphs/000026.png")
+dev.off()
+```
+
+# ADL TESTS
+## ADL models for pct change in mineral (quarter over quarter)
+
+```{r popminerals}
+
+# Choose lag structure 
+sel_data <- all_data
+
+# Estimate all variantes of ADL(2,2) down to ADL(1,0)
+adl22 <- lm(ead ~ ead_lag1 + ead_lag2 + 
+                minerals_dpct + minerals_dpct_lag1 + minerals_dpct_lag2 +
+                  hm + leader,data=sel_data)
+adl21 <- lm(ead ~ ead_lag1 + ead_lag2 +  minerals_dpct + minerals_dpct_lag1 +
+                  hm + leader,data=sel_data)
+adl20 <- lm(ead ~ ead_lag1 + ead_lag2 +  minerals_dpct +
+                  hm + leader,data=sel_data)
+adl12 <- lm(ead ~ ead_lag1 +  minerals_dpct + minerals_dpct_lag1 + 
+                  minerals_dpct_lag2 +
+                  hm + leader,data=sel_data)
+adl11 <- lm(ead ~ ead_lag1 + minerals_dpct + minerals_dpct_lag1 +
+                  hm + leader,data=sel_data)
+adl10 <- lm(ead ~ ead_lag1 + minerals_dpct +
+                  hm + leader,data=sel_data)
+
+
+# Collect
+adls <- list(adl22=adl22,adl21=adl21,adl20=adl20
+			,adl12=adl12,adl11=adl11,adl10=adl10)
+
+# Compute residuals
+adls.res <- lapply(adls,residuals)
+
+# Check F tests for restricted version of ADL(2,2)
+ff <- cbind(adl22=+Inf,
+  adl21=linearHypothesis(adl22, "minerals_dpct_lag2=0", test= "F" )$Pr[2],
+  adl20=linearHypothesis(adl22, c("minerals_dpct_lag2=0","minerals_dpct_lag1=0"), test= "F" )$Pr[2],
+  adl12=linearHypothesis(adl22, "ead_lag2=0", test= "F" )$Pr[2],
+  adl11=linearHypothesis(adl22, c("ead_lag2=0","minerals_dpct_lag2=0"), test= "F" )$Pr[2],
+  adl10=linearHypothesis(adl22, c("ead_lag2=0","minerals_dpct_lag2=0","minerals_dpct_lag1=0"), test= "F" )$Pr[2]
+)
+rownames(ff)<-"ftest"
+
+## Expanded diagnostics ##
+# Unit Root: 
+# Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test for the null hypothesis that x is level or trend stationary: should *not* reject (p>=0.1).
+# Phillips-Perron test for the null hypothesis that x has a unit root: should  reject (p<0.1).
+# unitrootTest: based on McKinnons's test statistics. Null is unit root, should *reject* (p<0.1)
+# Augmented Dickey-Fuller test (via adf.test): null is unit root: should *reject* (p<0.1)
+
+# Serial correlation tests:",
+# Breusch–Godfrey Lagr. mult. test. h0=No serial correlation up to p=2; *not reject* (p>=0.1)
+# Durbin–Watson H statistic: h0=First order autocorrelation is 0, *not reject* (p>=0.1))
+# Ljung–Box (‘portmanteau’) test statistic for examining the null hypothesis of independence in a given time series. (q.test replicates stata's)
+library(lmtest)
+library(tseries)
+library(fUnitRoots)
+tests <- rbind(
+	kpss=sapply(adls.res,function(x){kpss.test(x)$p.value}),
+	pp=sapply(adls.res,function(x){pp.test(x)$p.value}),
+	urt = sapply(adls.res,function(x){unitrootTest(x,lags=1)@test$p.value[1]}),
+	adf=sapply(adls.res,function(x){adf.test(x)$p.value}),
+	bg=sapply(adls.res,function(x){bgtest(x~1
+				,order=2,data=data.frame(res=x),fill=0)$p.value}),
+	dw = sapply(adls,function(x){dwtest(lm(formula(x$call),data=x$model),
+								alternative="two.sided")$p.value}) ,
+	lbox=sapply(adls.res,function(x){Box.test(x, type="Ljung-Box")$p.value}),
+	arIma=sapply(adls.res,function(x){auto.arima(x)$arma[c(1,2,6)]}),
+	ftest=ff,
+	bic=  sapply(adls,BIC))
+
+out <- data.frame(t(tests))
+names(out)[grep("^V",names(out))]<-c("ar","d","ma")
+ 
+passed <- subset(out,ftest>0.1
+						&kpss>=0.1
+						&pp<0.1 
+						&urt<0.1
+						&adf<0.1
+						&(bg>=0.1|dw>=0.1)
+						&lbox>=0.1)
+ 
+ss <- which(rownames(out)==rownames(passed)[which.min(passed$bic)])
+selname <- rownames(passed)[which.min(passed$bic)]
+cat("\nModel with lowest BIC among those (",nrow(out),") that passed all tests is ",selname,"\n",sep="")
+
+```
+
+# ADL model choosen (2,0)
+
+## Variations in the selected model
+````{r}
+    # The selected model on full data
+    reg1 <- lm(ead ~ ead_lag1 + ead_lag2 +minerals_dpct +
+                      hm + leader,data=all_data)
+    reg2 <- lm(ead ~ ead_lag1 + ead_lag2+ minerals_dpct +
+                      leader,data=all_data)
+    reg3 <- lm(ead ~ ead_lag1 + ead_lag2+ minerals_dpct +
+                      hm,data=all_data)
+    reg4 <- lm(ead ~ ead_lag1 + ead_lag2+ minerals_dpct
+                      ,data=all_data)
+    
+par(mfrow=c(1,3)) 
+acf(residuals(reg1))
+pacf(residuals(reg1))
+hist(residuals(reg1))
+    
+### THERE, DO A COMBINED TABLE FOR THE FOUR MODELS!!!!!  
+
+out1 <- ur.effects(reg1, lagdv1="ead_lag1", lagdv2="ead_lag2", iv="minerals_dpct")
+out2 <- ur.effects(reg2, lagdv1="ead_lag1", lagdv2="ead_lag2", iv="minerals_dpct")
+out3 <- ur.effects(reg3, lagdv1="ead_lag1", lagdv2="ead_lag2", iv="minerals_dpct")
+out4 <- ur.effects(reg4, lagdv1="ead_lag1", lagdv2="ead_lag2", iv="minerals_dpct")
+
+par(mar=c(4, 4.5, 1, 1), mfrow=c(1, 1))
+plot(c(0, 8), c(-1, 4), xlab="", ylab="", type="n", xaxt="n", bty="n", main="Full Sample")
+axis(side=1, at=seq(0, 8, 1), labels=seq(0, 8, 1))
+mtext("Quarters Since Shock", side=1, line=2)
+mtext("Cumulative Change in Popularity", side=2, line=3)
+lines(0:8, cumsum(out1$ur), type="l", lty=1)
+lines(0:8, cumsum(out2$ur), type="l", lty=2)
+lines(0:8, cumsum(out3$ur), type="l", lty=3)
+lines(0:8, cumsum(out4$ur), type="l", lty=4)
+
+legend("topright", legend=c("Model 1", "Model 2", "Model 3", "Model 4"),
+       col=c(1, 2, 3, 4), lty=c(1, 2, 3, 4))
+
+dev.copy(png, "/Users/Wallace/Desktop/Tese/fullsample.png")
+dev.off()
+
+stargazer(reg1, reg2, reg3, reg4,
+          title = "Effect of Minerals Price Index on the Popularity of Australian Prime Ministers",
+          align = TRUE, out = "fullsample.tex", type = "latex", omit = "leader", label = "fullsample")
+
+#summodels <- list(reg1, reg2, reg3, reg4)
+#modelsummary(summodels,
+ #            stars = FALSE, statistic = c("std.error", "p.value"), output = "sumfullsample.tex")
+
+    # The selected model on subset prior to 2000
+    sel_data <- subset(all_data,year<=2000)
+    reg5 <- lm(ead ~ ead_lag1 + ead_lag2 + minerals_dpct +
+                      hm + leader,data=sel_data)
+    reg6 <- lm(ead ~ ead_lag1 + ead_lag2 + minerals_dpct +
+                      leader,data=sel_data)
+    reg7 <- lm(ead ~ ead_lag1 + ead_lag2 + minerals_dpct +
+                      hm,data=sel_data)
+    reg8 <- lm(ead ~ ead_lag1 + ead_lag2 + minerals_dpct
+                      ,data=sel_data)
+    
+out5 <- ur.effects(reg5, lagdv1="ead_lag1", lagdv2="ead_lag2", iv="minerals_dpct")
+out6 <- ur.effects(reg6, lagdv1="ead_lag1", lagdv2="ead_lag2", iv="minerals_dpct")
+out7 <- ur.effects(reg7, lagdv1="ead_lag1", lagdv2="ead_lag2", iv="minerals_dpct")
+out8 <- ur.effects(reg8, lagdv1="ead_lag1", lagdv2="ead_lag2", iv="minerals_dpct")
+
+par(mar=c(4, 4.5, 1, 1), mfrow=c(1, 1))
+plot(c(0, 8), c(-1, 4), xlab="", ylab="", type="n", xaxt="n", bty="n", main="Unit Response Prior 2000")
+axis(side=1, at=seq(0, 8, 1), labels=seq(0, 8, 1))
+mtext("Quarters Since Shock", side=1, line=2)
+mtext("Cumulative Change in Popularity", side=2, line=3)
+lines(0:8, cumsum(out5$ur), type="l", lty=1)
+lines(0:8, cumsum(out6$ur), type="l", lty=2)
+lines(0:8, cumsum(out7$ur), type="l", lty=3)
+lines(0:8, cumsum(out8$ur), type="l", lty=4)
+
+legend("topright", legend=c("Model 1", "Model 2", "Model 3", "Model 4"),
+       col=c(1, 2, 3, 4), lty=c(1, 2, 3, 4))
+
+dev.copy(png, "/Users/Wallace/Desktop/Tese/unitprior2000.png")
+dev.off() 
+
+stargazer(reg5, reg6, reg7, reg8,
+          title = "Effect of Minerals Price Index on the Popularity of Australian Prime Ministers in the Period Prior to 2000",
+          align = TRUE, out = "unitprior2000.tex", type = "latex", omit = "leader", label = "unitprior_2000")
+
+    # The selected model on subset post 2000
+    sel_datap <- subset(all_data,year>2000)
+    reg9 <- lm(ead ~ ead_lag1 + ead_lag2 +minerals_dpct +
+                      hm + leader,data=sel_datap)
+    reg10 <- lm(ead ~ ead_lag1 + ead_lag2 +minerals_dpct +
+                      leader,data=sel_datap)
+    reg11 <- lm(ead ~ ead_lag1 + ead_lag2 +minerals_dpct +
+                      hm,data=sel_datap)
+    reg12 <- lm(ead ~ ead_lag1 + ead_lag2 +minerals_dpct
+                      ,data=sel_datap)
+out9 <- ur.effects(reg9, lagdv1="ead_lag1", lagdv2="ead_lag2", iv="minerals_dpct")
+out10 <- ur.effects(reg10, lagdv1="ead_lag1", lagdv2="ead_lag2", iv="minerals_dpct")
+out11 <- ur.effects(reg11, lagdv1="ead_lag1", lagdv2="ead_lag2", iv="minerals_dpct")
+out12 <- ur.effects(reg12, lagdv1="ead_lag1", lagdv2="ead_lag2", iv="minerals_dpct")
+
+par(mar=c(4, 4.5, 1, 1), mfrow=c(1, 1))
+plot(c(0, 8), c(-1, 4), xlab="", ylab="", type="n", xaxt="n", bty="n", main="Unit Response Post 2000")
+axis(side=1, at=seq(0, 8, 1), labels=seq(0, 8, 1))
+mtext("Quarters Since Shock", side=1, line=2)
+mtext("Cumulative Change in Popularity", side=2, line=3)
+lines(0:8, cumsum(out9$ur), type="l", lty=1)
+lines(0:8, cumsum(out10$ur), type="l", lty=2)
+lines(0:8, cumsum(out11$ur), type="l", lty=3)
+lines(0:8, cumsum(out12$ur), type="l", lty=4)
+
+legend("topright", legend=c("Model 1", "Model 2", "Model 3", "Model 4"),
+       col=c(1, 2, 3, 4), lty=c(1, 2, 3, 4))
+
+dev.copy(png, "/Users/Wallace/Desktop/Tese/unitpost2000.png")
+dev.off()
+
+stargazer(reg9, reg10, reg11, reg12,
+          title = "Effect of Minerals Price Index on the Popularity of Australian Prime Ministers in the Period Posterior to 2000",
+          align = TRUE, out = "unitpost2000.tex", type = "latex", omit = "leader", label = "unitpost_2000")
+
+````
+
+
+
+## Take a look at the correlations between minerals and domestic and between domestic and ead
+
+Can we spot any "anomalies"? As a first quick look we simply plot the partial correlations between our commodity, popularty and domestic economic variables in the pre- and post-2000 periods. We can see that Pré 2000, a relação minerals e growth era positiva fraca e a associação entre minerals e economic misery negativa, o que faz sentido. A relação growth-popularity era forte, o que também faz sentido.  
+
+Pós 2000 temos uma aparente anomalia econômica  forte: minerals e misery fica positiva, e outra aparente anomalia politica que é o enfraquecimento da relação entre growth e popularidade. 
+
+```{r correlations}
+
+#sel_data <- subset(all_data, year < 2000)
+datapre <- subset(all_data, year <2000)
+corrgram(subset(datapre,select=c(minerals_dpct,okun_misery,gdp_growth,ead))
+         , main = "Pre-2000")
+
+dev.copy(png, "/Users/Wallace/Desktop/Tese/Graphs/corrokunprior.png")
+dev.off()
+
+#sel_data <- subset(all_data, year >= 2000)
+datapos <- subset(all_data, year >=2000)
+corrgram(subset(sel_data,select=c(minerals_dpct,okun_misery,gdp_growth,ead))
+         , main = "Post-2000")
+
+dev.copy(png, "/Users/Wallace/Desktop/Tese/Graphs/corrokunpost.png")
+dev.off()
+
+```
+
+We now take a closer look at these anomalies, estiamting ADLs in the pre- and post- periods.
+
+### Economic Anomaly: Economic Misery
+```{r misery}
+
+# Choose lag structure 
+sel_data <- subset(all_data, year<2000)
+
+# Estimate all variants of ADL(2,2) down to ADL(1,0)
+iadl22 <- lm(okun_misery ~ okun_misery_lag1 + okun_misery_lag2 + 
+                minerals_dpct + minerals_dpct_lag1 + minerals_dpct_lag2 + quarter, data=sel_data)
+iadl21 <- lm(okun_misery ~ okun_misery_lag1 + okun_misery_lag2 +  
+               minerals_dpct + minerals_dpct_lag1+ quarter, data=sel_data)
+iadl20 <- lm(okun_misery ~ okun_misery_lag1 + okun_misery_lag2 +  minerals_dpct + quarter,
+             data=sel_data)
+iadl12 <- lm(okun_misery ~ okun_misery_lag1 +  minerals_dpct + 
+               minerals_dpct_lag1 + minerals_dpct_lag2 + quarter,data=sel_data)
+iadl11 <- lm(okun_misery ~ okun_misery_lag1 + minerals_dpct + minerals_dpct_lag1 + quarter,
+             data=sel_data)
+iadl10 <- lm(okun_misery ~ okun_misery_lag1 + minerals_dpct + quarter,
+             data=sel_data)
+
+
+# Collect
+iadls <- list(iadl22=iadl22,iadl21=iadl21,iadl20=iadl20
+			,iadl12=iadl12,iadl11=iadl11,iadl10=iadl10)
+
+# Compute residuals
+iadls.res <- lapply(iadls,residuals)
+
+# Check F tests for restricted version of ADL(2,2)
+ff <- cbind(iadl22=Inf,
+  iadl21=linearHypothesis(iadl22, "minerals_dpct_lag2=0", test= "F" )$Pr[2],
+  iadl20=linearHypothesis(iadl22, c("minerals_dpct_lag2=0","minerals_dpct_lag1=0"), test= "F" )$Pr[2],
+  iadl12=linearHypothesis(iadl22, "okun_misery_lag2=0", test= "F" )$Pr[2],
+  iadl11=linearHypothesis(iadl22, c("okun_misery_lag2=0","minerals_dpct_lag2=0"), test= "F" )$Pr[2],
+  iadl10=linearHypothesis(iadl22, c("okun_misery_lag2=0","minerals_dpct_lag2=0","minerals_dpct_lag1=0"), test= "F" )$Pr[2]
+)
+rownames(ff)<-"ftest"
+
+tests <- rbind(
+	kpss=sapply(iadls.res,function(x){kpss.test(x)$p.value}),
+	pp=sapply(iadls.res,function(x){pp.test(x)$p.value}),
+	urt = sapply(iadls.res,function(x){unitrootTest(x,lags=1)@test$p.value[1]}),
+	adf=sapply(iadls.res,function(x){adf.test(x)$p.value}),
+	bg=sapply(iadls.res,function(x){bgtest(x~1
+				,order=2,data=data.frame(res=x),fill=0)$p.value}),
+	dw = sapply(adls,function(x){dwtest(lm(formula(x$call),data=x$model),
+								alternative="two.sided")$p.value}) ,
+	lbox=sapply(iadls.res,function(x){Box.test(x, type="Ljung-Box")$p.value}),
+	arIma=sapply(iadls.res,function(x){auto.arima(x)$arma[c(1,2,6)]}),
+	ftest=ff,
+	bic=  sapply(iadls,BIC))
+
+out <- data.frame(t(tests))
+names(out)[grep("^V",names(out))]<-c("ar","d","ma")
+ 
+passed <- subset(out,ftest>0.1
+						&kpss>=0.1
+						&pp<0.1 
+						&urt<0.1
+						&adf<0.1
+					  &(bg>=0.1|dw>=0.1|lbox>=0.1))
+ss <- which(rownames(out)==rownames(passed)[which.min(passed$bic)])
+selname <- rownames(passed)[which.min(passed$bic)]
+cat("\nModel with lowest BIC among those that passed all tests is ",selname,"\n",sep="")
+```
+
+
+## Political anomaly 
+```{r popgrowth}
+
+# Choose lag structure 
+sel_datap <- subset(all_data, year>=2000)
+
+# Estimate all variantes of ADL(2,2) down to ADL(1,0)
+adl22 <- lm(ead ~ ead_lag1 + ead_lag2 + 
+                gdp_growth + gdp_growth_lag1 + gdp_growth_lag2 +
+                  hm + leader,data=sel_data)
+adl21 <- lm(ead ~ ead_lag1 + ead_lag2 +  gdp_growth + gdp_growth_lag1 +
+                  hm + leader,data=sel_data)
+adl20 <- lm(ead ~ ead_lag1 + ead_lag2 +  gdp_growth +
+                  hm + leader,data=sel_data)
+adl12 <- lm(ead ~ ead_lag1 +  gdp_growth + gdp_growth_lag1 + 
+                  gdp_growth_lag2 +
+                  hm + leader,data=sel_data)
+adl11 <- lm(ead ~ ead_lag1 + gdp_growth + gdp_growth_lag1 +
+                  hm + leader,data=sel_data)
+adl10 <- lm(ead ~ ead_lag1 + gdp_growth +
+                  hm + leader,data=sel_data)
+
+
+# Collect
+adls <- list(adl22=adl22,adl21=adl21,adl20=adl20
+			,adl12=adl12,adl11=adl11,adl10=adl10)
+
+# Compute residuals
+adls.res <- lapply(adls,residuals)
+
+# Check F tests for restricted version of ADL(2,2)
+ff <- cbind(adl22=+Inf,
+  adl21=linearHypothesis(adl22, "gdp_growth_lag2=0", test= "F" )$Pr[2],
+  adl20=linearHypothesis(adl22, c("gdp_growth_lag2=0","gdp_growth_lag1=0"), test= "F" )$Pr[2],
+  adl12=linearHypothesis(adl22, "ead_lag2=0", test= "F" )$Pr[2],
+  adl11=linearHypothesis(adl22, c("ead_lag2=0","gdp_growth_lag2=0"), test= "F" )$Pr[2],
+  adl10=linearHypothesis(adl22, c("ead_lag2=0","gdp_growth_lag2=0","gdp_growth_lag1=0"), test= "F" )$Pr[2]
+)
+rownames(ff)<-"ftest"
+
+## Expanded diagnostics ##
+# Unit Root: 
+# Kwiatkowski-Phillips-Schmidt-Shin (KPSS) test for the null hypothesis that x is level or trend stationary: should *not* reject (p>=0.1).
+# Phillips-Perron test for the null hypothesis that x has a unit root: should  reject (p<0.1).
+# unitrootTest: based on McKinnons's test statistics. Null is unit root, should *reject* (p<0.1)
+# Augmented Dickey-Fuller test (via adf.test): null is unit root: should *reject* (p<0.1)
+
+# Serial correlation tests:",
+# Breusch–Godfrey Lagr. mult. test. h0=No serial correlation up to p=2; *not reject* (p>=0.1)
+# Durbin–Watson H statistic: h0=First order autocorrelation is 0, *not reject* (p>=0.1))
+# Ljung–Box (‘portmanteau’) test statistic for examining the null hypothesis of independence in a given time series. (q.test replicates stata's)
+library(lmtest)
+library(tseries)
+library(fUnitRoots)
+tests <- rbind(
+	kpss=sapply(adls.res,function(x){kpss.test(x)$p.value}),
+	pp=sapply(adls.res,function(x){pp.test(x)$p.value}),
+	urt = sapply(adls.res,function(x){unitrootTest(x,lags=1)@test$p.value[1]}),
+	adf=sapply(adls.res,function(x){adf.test(x)$p.value}),
+	bg=sapply(adls.res,function(x){bgtest(x~1
+				,order=2,data=data.frame(res=x),fill=0)$p.value}),
+	dw = sapply(adls,function(x){dwtest(lm(formula(x$call),data=x$model),
+								alternative="two.sided")$p.value}) ,
+	lbox=sapply(adls.res,function(x){Box.test(x, type="Ljung-Box")$p.value}),
+	arIma=sapply(adls.res,function(x){auto.arima(x)$arma[c(1,2,6)]}),
+	ftest=ff,
+	bic=  sapply(adls,BIC))
+
+out <- data.frame(t(tests))
+names(out)[grep("^V",names(out))]<-c("ar","d","ma")
+ 
+passed <- subset(out,ftest>0.1
+						&kpss>=0.1
+						&pp<0.1 
+						&urt<0.1
+						&adf<0.1
+						&(bg>=0.1|dw>=0.1)
+						&lbox>=0.1)
+ 
+ss <- which(rownames(out)==rownames(passed)[which.min(passed$bic)])
+selname <- rownames(passed)[which.min(passed$bic)]
+cat("\nModel with lowest BIC among those (",nrow(out),") that passed all tests is ",selname,"\n",sep="")
+
+```
+
+## Okun ~ EAD 
+```{r}
+# Choose lag structure 
+sel_data <- subset(all_data, year<2000)
+
+# Estimate all variants of ADL(2,2) down to ADL(1,0)
+oadl22 <- lm(ead ~ ead_lag1 + ead_lag2 + 
+                okun_misery + okun_misery_lag1 + okun_misery_lag2 +
+                  hm + leader,data=sel_data)
+oadl21 <- lm(ead ~ ead_lag1 + ead_lag2 +  okun_misery + okun_misery_lag1 +
+                  hm + leader,data=sel_data)
+oadl20 <- lm(ead ~ ead_lag1 + ead_lag2 +  okun_misery +
+                  hm + leader,data=sel_data)
+oadl12 <- lm(ead ~ ead_lag1 +  okun_misery + okun_misery_lag1 + 
+                  okun_misery_lag2 +
+                  hm + leader,data=sel_data)
+oadl11 <- lm(ead ~ ead_lag1 + okun_misery + okun_misery_lag1 +
+                  hm + leader,data=sel_data)
+oadl10 <- lm(ead ~ ead_lag1 + okun_misery +
+                  hm + leader,data=sel_data)
+
+
+# Collect
+oadls <- list(oadl22=oadl22,oadl21=oadl21,oadl20=oadl20
+			,oadl12=oadl12,oadl11=oadl11,oadl10=oadl10)
+
+# Compute residuals
+oadls.res <- lapply(oadls,residuals)
+
+# Check F tests for restricted version of ADL(2,2)
+ff <- cbind(iadl22=Inf,
+  oadl21=linearHypothesis(oadl22, "okun_misery_lag2=0", test= "F" )$Pr[2],
+  oadl20=linearHypothesis(oadl22, c("okun_misery_lag2=0","okun_misery_lag1=0"), test= "F" )$Pr[2],
+  oadl12=linearHypothesis(oadl22, "ead_lag2=0", test= "F" )$Pr[2],
+  oadl11=linearHypothesis(oadl22, c("ead_lag2=0","okun_misery_lag2=0"), test= "F" )$Pr[2],
+  oadl10=linearHypothesis(oadl22, c("ead_lag2=0","okun_misery_lag2=0","okun_misery_lag1=0"), test= "F" )$Pr[2]
+)
+rownames(ff)<-"ftest"
+
+tests <- rbind(
+	kpss=sapply(oadls.res,function(x){kpss.test(x)$p.value}),
+	pp=sapply(oadls.res,function(x){pp.test(x)$p.value}),
+	urt = sapply(oadls.res,function(x){unitrootTest(x,lags=1)@test$p.value[1]}),
+	adf=sapply(oadls.res,function(x){adf.test(x)$p.value}),
+	bg=sapply(oadls.res,function(x){bgtest(x~1
+				,order=2,data=data.frame(res=x),fill=0)$p.value}),
+	dw = sapply(adls,function(x){dwtest(lm(formula(x$call),data=x$model),
+								alternative="two.sided")$p.value}) ,
+	lbox=sapply(oadls.res,function(x){Box.test(x, type="Ljung-Box")$p.value}),
+	arIma=sapply(oadls.res,function(x){auto.arima(x)$arma[c(1,2,6)]}),
+	ftest=ff,
+	bic=  sapply(oadls,BIC))
+
+out <- data.frame(t(tests))
+names(out)[grep("^V",names(out))]<-c("ar","d","ma")
+ 
+passed <- subset(out,ftest>0.1
+						&kpss>=0.1
+						&pp<0.1 
+						&urt<0.1
+						&adf<0.1
+					  &(bg>=0.1|dw>=0.1|lbox>=0.1))
+ss <- which(rownames(out)==rownames(passed)[which.min(passed$bic)])
+selname <- rownames(passed)[which.min(passed$bic)]
+cat("\nModel with lowest BIC among those that passed all tests is ",selname,"\n",sep="")
+```
+
+
+## Tables Okun and Anomaly
+```{r}
+#Okun is ADL20
+sel_data$quarter <- factor(sel_data$quarter)
+sel_datap$quarter <- factor(sel_datap$quarter)
+okunpre <- lm(okun_misery ~ okun_misery_lag1 + okun_misery_lag2 +  minerals_dpct + quarter,
+             data=sel_data)
+okunpos <- lm(okun_misery ~ okun_misery_lag1 + okun_misery_lag2 +  minerals_dpct + quarter,
+             data=sel_datap)
+
+stargazer(okunpre, okunpos,
+          title = "Economy Misery and Minerals Prior and Post to 2000",
+          align = TRUE, out = "okunprepos2000.tex", type = "latex", label = "okunprepos")
+
+
+#Anomaly is ADL20
+sel_data$leader <- factor(sel_data$leader)
+sel_datap$leader <- factor(sel_datap$leader)
+anompre <- lm(ead ~ ead_lag1 + ead_lag2 +  gdp_growth +
+                  hm + leader,data=sel_data)
+anompos <- lm(ead ~ ead_lag1 + ead_lag2 +  gdp_growth +
+                  hm + leader,data=sel_datap)
+stargazer(anompre, anompos, 
+          title = "Popularity and GDP Growth Prior and Post to 2000",
+          align = TRUE, out = "eadgrowprepos2000.tex", type = "latex", omit = "leader", label = "eadgrow")
+
+#Okun em EAD ADL12
+lm(ead ~ ead_lag1 +  okun_misery + okun_misery_lag1 + 
+                  okun_misery_lag2 +
+                  hm + leader,data=sel_data)
+```
+
+## Interaction factor 
+```{r}
+all_data <- all_data %>%
+  mutate(post = ifelse(year >= 2000, 1, 0))
+all_data$quarter <- factor(all_data$quarter)
+
+okunfactor <- lm(okun_misery ~ okun_misery_lag2 + okun_misery_lag1 + minerals_dpct + quarter + post + minerals_dpct:post, data = all_data)
+anomfactorgdp <- lm(ead ~ ead_lag1 + gdp_growth + hm + leader + post + gdp_growth:post, data=all_data)
+
+stargazer(okunfactor,
+          title = "Okun Misery Index and Commodity Price Relationship with Interaction",
+          align = TRUE, out = "okunfactor.tex", type = "latex")
+stargazer(anomfactorgdp,
+          title = "GDP Growth and Popularity Relationship with Interaction",
+          align = TRUE, out = "eadfactor.tex", type = "latex", omit = "leader")
+
+```
+
+# Presentation
+```{r}
+meanfull <- mean((all_data$minerals_dpct), na.rm = TRUE)
+se_full <- sd(all_data$minerals_dpct, na.rm = TRUE) / sqrt(length(all_data$minerals_dpct[!is.na(all_data$minerals_dpct)]))
+summary(meanfull)
+summary(se_full)
+
+meanpre <- mean(abs(sel_data$minerals_dpct), na.rm = TRUE)
+summary(meanpre)
+meanpost <- mean(abs(sel_datap$minerals_dpct), na.rm = TRUE)
+summary(meanpost)
+
+
+all_data$absmin <- abs(all_data$minerals_dpct)
+summary(all_data$absmin)
+```
+
+
+
+
+# Latex - num precisa, mas deixa aqui 
+## Prior 2000
+```{r}
+    # Um exemplo de como montar uma tabela (há outras formas de fazer) - LATEX
+    # Aqui omitimos os coeffs dos pms, mas teria que acrescentar 
+    # uma linha para dizer que o modelo tem pm fixed effects
+    # seria bom já acrescentar também o long-run effect na mesma tabela 
+    # ou entao fazer um gráfico depois com esses long-run effects...
+ texreg(list(reg4,reg5,reg6)
+           , include.ci = FALSE
+           , custom.header = list("Pre-2000"=1:3)
+           #, custom.model.names = c("3-Type","5-Type","7-Type") 
+           , omit.coef = "leader"
+           , custom.coef.names = c("(Intercept)","Lag. Popularity"
+                                   ,"Minerals (pct. change)","Honeymoon")
+           , include.pvalues = T
+           , digits = 3
+           , stars = c(0.01, 0.05, 0.1)
+           , label = "tab:adl"
+           , caption = "Coefficients of ADL(1,0)"
+           , caption.above =T
+           , bold = 0.1
+           , ci.force = FALSE
+           , file = "modelbefore.tex", type = "latex")   
+```
+
+## Post 2000
+```{r}
+    print(texreg(list(reg7,reg8,reg9)
+           , include.ci = FALSE
+           , custom.header = list("Post 2000"=1:3)
+           , custom.model.names = c("3-Type","5-Type","7-Type") 
+           , omit.coef = "leader"
+           , custom.coef.names = c("(Intercept)","Lag. Popularity"
+                                   ,"Minerals (pct. change)","Honeymoon")
+           , include.pvalues = T
+           , digits = 3
+           , stars = c(0.01, 0.05, 0.1)
+           , label = "tab:adl"
+           , caption = "Coefficients of ADL(1,0)"
+           , caption.above =T
+           , bold = 0.1
+           , ci.force = FALSE))
+```
+
+## All period
+```{r}
+    print(texreg(list(reg1,reg2,reg3)
+           , include.ci = FALSE
+           , custom.header = list("All Period"=1:3)
+           , custom.model.names = c("3-Type","5-Type","7-Type") 
+           , omit.coef = "leader"
+           , custom.coef.names = c("(Intercept)","Lag. Popularity"
+                                   ,"Minerals (pct. change)","Honeymoon")
+           , include.pvalues = T
+           , digits = 3
+           , stars = c(0.01, 0.05, 0.1)
+           , label = "tab:adl"
+           , caption = "Coefficients of ADL(1,0)"
+           , caption.above =T
+           , bold = 0.1
+           , ci.force = FALSE))
+```
+
+
+# long run effeects - with PM
+```{r}
+# Fit the dynamic linear model for the first model (reg1)
+model_reg1 <- dynlm(ead ~ ead_lag1 + minerals_dpct + hm + leader, data = all_data)
+
+coefficients_reg1 <- coef(model_reg1)
+summary(model_reg1)
+
+```
+
+
+  # Pick one model to examine (and compute long run effects)
+  # You can later create a list with all models and apply all these procedures to all
+  # Or you can do this by hand to report the results 
+  
+# Residual diagnosis
+## Prior 2000
+```{r}
+the.reg <- reg4 #escolhendo o reg4
+
+  # Residuals diagnositcs
+  par(mfrow=c(1,3))
+  acf(residuals(the.reg))
+  pacf(residuals(the.reg))
+  hist(residuals(the.reg))
+
+    
+  source("/Users/Wallace/Desktop/Tese/Data/unit_resp_adl.R")
+  out <- effects(the.reg,
+                        lagdv1="ead_lag1",
+                        iv="minerals_dpct")
+
+  par(mar=c(4,4.5,1,1),mfrow=c(1,1))
+  plot(c(0,8),c(-1,4),xlab="",ylab="",type="n",xaxt="n",bty="n",main="Prior to year 2000")
+  axis(side=1,at=seq(0,8,1),labels=seq(0,8,1))
+  mtext("Quarters Since Shock",side=1,line=2)
+  mtext("Cummulative Change in Popularity",side=2,line=3)
+  lines(0:8,cumsum(out$ur),type="l",lty=1)
+  # pode acrescentar linhas para outros modelos no mesmo gráfico
+```
+
+## Post 2000
+```{r}
+the.reg <- reg4 #escolhendo o reg4
+
+  # Residuals diagnositcs
+  par(mfrow=c(1,3))
+  acf(residuals(the.reg))
+  pacf(residuals(the.reg))
+  hist(residuals(the.reg))
+
+    
+  source("/Users/Wallace/Desktop/Tese/Data/unit_resp_adl.R")
+  out <- effects(the.reg,
+                        lagdv1="ead_lag1",
+                        iv="minerals_dpct")
+
+  par(mar=c(4,4.5,1,1),mfrow=c(1,1))
+  plot(c(0,8),c(-1,4),xlab="",ylab="",type="n",xaxt="n",bty="n",main="Prior to year 2000")
+  axis(side=1,at=seq(0,8,1),labels=seq(0,8,1))
+  mtext("Quarters Since Shock",side=1,line=2)
+  mtext("Cummulative Change in Popularity",side=2,line=3)
+  lines(0:8,cumsum(out$ur),type="l",lty=1)
+```
+
+## Full period
+```{r}
+the.reg <- reg1 #escolhendo o reg4
+
+  # Residuals diagnositcs
+  par(mfrow=c(1,3))
+  acf(residuals(the.reg))
+  pacf(residuals(the.reg))
+  hist(residuals(the.reg))
+
+    
+  source("/Users/Wallace/Desktop/Tese/Data/unit_resp_adl.R")
+  out <- effects(the.reg,
+                        lagdv1="ead_lag1",
+                        iv="minerals_dpct")
+
+  par(mar=c(4,4.5,1,1),mfrow=c(1,1))
+  plot(c(0,8),c(-1,4),xlab="",ylab="",type="n",xaxt="n",bty="n",main="Prior to year 2000")
+  axis(side=1,at=seq(0,8,1),labels=seq(0,8,1))
+  mtext("Quarters Since Shock",side=1,line=2)
+  mtext("Cummulative Change in Popularity",side=2,line=3)
+  lines(0:8,cumsum(out$ur),type="l",lty=1)
+```
+
+
+
+# 2000 Comm X Dom - Checar se a relação entre minerals e as variaveis domesticas é diferente pre-pos 2000
+```{r}
+dom_all <- lm(cbind(inflation, gdp_growth, unemployment) ~ minerals_dpct, data = all_data)
+summary(dom_all)
+print(dom_all)
+
+# Subset the data for years before and after 2000
+before2000 <- subset(all_data, year <= 2000)
+after2000 <- subset(all_data, year > 2000)
+
+# Perform linear regression for data before 2000
+modelbefore <- lm(cbind(inflation, gdp_growth, unemployment) ~ minerals_dpct, data = before2000)
+descriptive_stats_before_2000 <- tidy(modelbefore)
+
+# Perform linear regression for data after 2000
+modelafter <- lm(cbind(inflation, gdp_growth, unemployment) ~ minerals_dpct, data = after2000)
+descriptive_stats_after_2000 <- tidy(modelafter)
+
+stargazer(modelbefore, 
+          title = "Commodities and Domestic Variables Prior to 2000",
+          align = TRUE, out = "comdompre2000.tex", type = "latex")
+
+```
+
+
+# 2000 Dom X EAD - Checar se a relacao entre domesticas e popularidade é diferente
+
+```{r}
+ead_all <- lm(cbind(inflation, gdp_growth, unemployment) ~ minerals_dpct, data = all_data)
+summary(ead_all)
+print(ead_all)
+
+# Perform linear regression for data before 2000 for ead
+eadbefore <- lm(cbind(inflation, gdp_growth, unemployment) ~ ead, data = before2000)
+eadbefore2000 <- tidy(modelbefore)
+
+# Perform linear regression for data after 2000
+eadafter <- lm(cbind(inflation, gdp_growth, unemployment) ~ ead, data = after2000)
+eadafter2000 <- tidy(modelafter)
+
+# Print the tables
+cat("Descriptive Statistics - Before 2000:\n")
+print(eadbefore2000)
+
+cat("\nDescriptive Statistics - After 2000:\n")
+print(eadafter2000)
+
+stargazer(ead_all, 
+          title = "Executive Approval and Domestic Variables",
+          align = TRUE, out = "eaddomall.tex", type = "latex")
+
+```
+
+
+# A relação entre Commodities e Domestic muda de um PM para outro? 
+
+```{r}
+leader_names <- c("Menzies", "Holt", "McEwen", "Gorton", "McMahon",
+                  "Whitlam", "Fraser", "Hawke", "Keating", "Howard",
+                  "Rudd", "Gillard", "Rudd", "Abbott", "Turnbull", "Morrison")
+
+regression_models <- list()
+
+for (leader_name in leader_names) {
+  subset_data <- all_data[all_data$leader == leader_name, ]
+  
+  # Remove rows with NA values in relevant columns
+  subset_data <- na.omit(subset_data[, c("gdp_growth", "inflation", "unemployment", "minerals_h")])
+  
+  if (nrow(subset_data) > 0) {
+    model_gdp <- lm(gdp_growth ~ minerals_h, data = subset_data)
+    regression_models[[paste0("gdp_", leader_name)]] <- model_gdp
+    
+    model_inflation <- lm(inflation ~ minerals_h, data = subset_data)
+    regression_models[[paste0("inflation_", leader_name)]] <- model_inflation
+    
+    model_unemployment <- lm(unemployment ~ minerals_h, data = subset_data)
+    regression_models[[paste0("unemployment_", leader_name)]] <- model_unemployment
+  }
+}
+
+# Create an empty list to store regression models
+coefficients_list <- list()
+
+# ... your loop to create regression models ...
+
+# Create an empty data frame to store the results
+results_df <- data.frame()
+
+# Iterate over leader names
+for (leader_name in leader_names) {
+  subset_data <- all_data[all_data$leader == leader_name, ]
+  
+  subset_data <- na.omit(subset_data)  # Remove rows with NA values
+  
+  if (nrow(subset_data) > 0) {
+    model_gdp <- lm(gdp_growth ~ minerals_h, data = subset_data)
+    model_inflation <- lm(inflation ~ minerals_h, data = subset_data)
+    model_unemployment <- lm(unemployment ~ minerals_h, data = subset_data)
+  
+# Extract coefficients using tidy() and store in coefficients_list
+    coefficients_list[[leader_name]] <- data.frame(
+      Leader = leader_name,
+      Constant_GDP = coef(model_gdp)[1],
+      Coefficient_Minerals_GDP = coef(model_gdp)[2],
+      Constant_Inflation = coef(model_inflation)[1],
+      Coefficient_Minerals_Inflation = coef(model_inflation)[2],
+      Constant_Unemployment = coef(model_unemployment)[1],
+      Coefficient_Minerals_Unemployment = coef(model_unemployment)[2]
+    )
+  }
+}
+
+# Combine coefficients into a single data frame
+all_coefficients <- do.call(rbind, coefficients_list)
+
+# Print the combined coefficients data frame
+print(all_coefficients)
+
+
+#Results for each PM
+for (leader_name in leader_names) {
+  leader_results <- subset(all_coefficients, Leader == leader_name)
+  print(leader_results)
+}
+```
+
+
+
+
+
+
+
+

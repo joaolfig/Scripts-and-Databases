@@ -1,0 +1,19 @@
+descriptives count data 1980 to 2020.dta (application/x-stata) 947393 bytes.
+Approval data for SEAD v1.xlsx (application/vnd.openxmlformats-officedocument.spreadsheetml.sheet) 3023761 bytes.
+Ststdnsadata through 2020 (2021 revision).xlsx (application/vnd.openxmlformats-officedocument.spreadsheetml.sheet) 2279401 bytes.
+Generate Figure 3.do (text/x-stata-syntax) 1037 bytes.
+honeymoon models.do (text/x-stata-syntax) 4745 bytes.
+table 2.do (text/x-stata-syntax) 2382 bytes.
+controls for table 3.dta (application/x-stata) 467148 bytes.
+Generate Table 1 and Figure 1.do (text/x-stata-syntax) 1455 bytes.
+load_functions.R (type/x-r-syntax) 49263 bytes.
+Codebook for analysis in table 3.pdf (application/pdf) 72033 bytes.
+Codebook SEAD governors v1.pdf (application/pdf) 273265 bytes.
+readme.txt (text/plain) 18386 bytes.
+SEAD governor quarterly v1.dta (application/x-stata) 408582 bytes.
+Quarters.zip (application/zip) 12110 bytes.
+generate SEAD.R (type/x-r-syntax) 5805 bytes.
+Generate Figure 2 (New York).do (text/x-stata-syntax) 6257 bytes.
+Codebook Table 2.pdf (application/pdf) 55962 bytes.
+Approval data for SEAD v1.dta (application/x-stata) 5091631 bytes.
+Codebook for SEAD governor quarterly v1.pdf (application/pdf) 60863 bytes.

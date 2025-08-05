@@ -33,3 +33,21 @@ BSF_dataset <- BSF_dataset %>% group_by(state) %>% fill(everything(), .direction
 
 # Make NA in any column into 0
 BSF_dataset[is.na(BSF_dataset)] <- 0
+
+# Make it into a 3 levels factor
+# Where 0 = not implemented, 1 = implemented without strictness, 2 = implemented with strictness
+# From the sum of the 2 dummies I have
+colnames(BSF_dataset)
+
+BSF_dataset$BSF_deposit_3level <- BSF_dataset$BSF_implementation + BSF_dataset$Deposit_strictness
+BSF_dataset$BSF_withdrawal_3level <- BSF_dataset$BSF_implementation + BSF_dataset$Withdrawal_strictness
+
+# Make both them into factors
+BSF_dataset$BSF_deposit_3level <- factor(BSF_dataset$BSF_deposit_3level, levels = c(0, 1, 2), labels = c("No BSF", "Lenient rule", "Strict rule"))
+BSF_dataset$BSF_withdrawal_3level <- factor(BSF_dataset$BSF_withdrawal_3level, levels = c(0, 1, 2), labels = c("No BSF", "Lenient rule", "Strict rule"))
+
+
+
+
+
+

@@ -22,3 +22,8 @@ https://en.wikipedia.org/wiki/List_of_governors_of_Alaska
 
 Aprovação do Governador:
 SEAD 1 - State Executive Approval Dataset - https://dataverse.harvard.edu/dataverse/sead
+
+
+Replication datas
+Singer (2023): https://dataverse.unc.edu/dataset.xhtml?persistentId=doi:10.15139/S3/QHHQEF (Precisei de VPN pra pegar)
+Garro (2021): https://academic.oup.com/jleo/article/37/3/512/6045373?login=true#304690271

@@ -7,13 +7,15 @@ library(stringr)
 
 setwd("C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts-and-Databases")
 
-employment <- read.csv("Databases/BLS Data/Employment/Annual/Employment_Nonfarm_US_National_Annual.csv", header = TRUE, sep = ",")
+employment <- read.csv("Databases/BLS Data/Employment/Not Adjusted 39-2025/Annual/Employment_Nonfarm_US_National_Annual.csv", header = TRUE, sep = ",")
 unemployment <- read.csv("Databases/BLS Data/Employment/Annual/Unemployment_Rate_US_National_Annual.csv", header = TRUE, sep = ",")
 
 employment$observation_date <- as.Date(employment$observation_date, format = "%Y-%m-%d")
 unemployment$observation_date <- as.Date(unemployment$observation_date, format = "%Y-%m-%d")
 
-############### REPRODUÇÃO WOLFERS 2007, APPENDIX B 
+
+
+############### REPRODUÇÃO WOLFERS 2007, APPENDIX B
 
 employment$PAYEMS <- log(employment$PAYEMS)
 
@@ -21,7 +23,7 @@ employment <- employment %>%
   filter(observation_date >= as.Date("1948-01-01")  & observation_date <= as.Date("2020-12-31"))
 
 employment$employment_trend_lm <- predict(lm(employment$PAYEMS ~ employment$observation_date))
-employment$employment_trend_hp <- hpfilter(employment$PAYEMS, freq = 100)$trend 
+employment$employment_trend_hp <- hpfilter(employment$PAYEMS, freq = 100)$trend
 
 ggplot(employment, aes(x = observation_date)) +
   geom_line(aes(y = employment[,'PAYEMS'])) +
@@ -40,7 +42,7 @@ employment <- merge(employment, unemployment, by = "observation_date")
 ggplot(employment, aes(x = observation_date)) +
   geom_line(aes(y = (((employment[,'UNRATE'])/100)-mean((employment[,'UNRATE'])/100)))) +
   geom_line(aes(y = employment[,'employment_gap_lm']), color = "blue") +
-  geom_line(aes(y = employment[,'employment_gap_hp']), color = "red") + 
+  geom_line(aes(y = employment[,'employment_gap_hp']), color = "red") +
   labs(title = "US Employment Gap & Unemployment Rate", x = "Year", y = "Log Employment") +
   scale_x_date(limits = as.Date(c("1940-01-01", "1997-12-31"))) +
   scale_y_continuous(limits = c(-0.10, 0.10)) +
@@ -76,10 +78,10 @@ employment_states_trends <- employment_states
 for (i in 2:51) {
   # Identify complete cases for the current column and the year column
   complete_cases <- complete.cases(employment_states[, i], employment_states$year)
-  
+
   # Fit the linear model only on complete cases
   model <- lm(as.numeric(employment_states[complete_cases, i]) ~ employment_states$year[complete_cases])
-  
+
   # Predict the values for the complete cases and replace the column values
   employment_states_trends[complete_cases, i] <- predict(model, newdata = employment_states[complete_cases, ])
 }
@@ -100,11 +102,11 @@ employment_states_gap %>%
   ggplot(aes(x = year, y = value, group = name, color = name)) +
   geom_line()
 
-# employment_states_gap has columns for states and rows for years, I want to 
+# employment_states_gap has columns for states and rows for years, I want to
 # I wanna convert it to a dataframe with three columns: year, state, and gap
 
-employment_states_gap <- employment_states_gap %>% 
-  gather(key = 'state', value = 'employment_gap', -year) %>% 
+employment_states_gap <- employment_states_gap %>%
+  gather(key = 'state', value = 'employment_gap', -year) %>%
   mutate(state = str_to_title(state))
 
 employment_states_gap$year <- as.character(employment_states_gap$year)
@@ -118,7 +120,7 @@ employment_states_gap <- employment_states_gap %>%
 employment_states_gap[,3:4] <- round(employment_states_gap[,3:4], 4)
 
 str(employment_states_gap)
-employment_national_gap <- employment_states_gap %>% 
+employment_national_gap <- employment_states_gap %>%
   filter(state == "NATIONAL_NOT_SEASONALLY_ADJUSTED")
 
 colnames(employment_national_gap)[3] <- "employment_gap_national"
@@ -129,4 +131,3 @@ colnames(employment_national_gap)[4] <- "employment_gap_change_national"
 employment_states_gap <- merge(employment_states_gap, employment_national_gap[,c('year','employment_gap_national','employment_gap_change_national')], by = c('year'), all.x = TRUE)
 
 employment_states_gap$competence_employment <- employment_states_gap$employment_gap_change - employment_states_gap$employment_gap_change_national
-  

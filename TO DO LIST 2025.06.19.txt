@@ -1,0 +1,11 @@
+Dissertação
+-> Reproduzir VAR do Engemann pra cada estado e colocar tudo numa mesma tabela
+----> Verificar a força a polaridade e significância do choque na minha reprodução, ver o quanto está batendo com o engemann
+----> Entender e tantar fazer o modleo de impusle. Eu já tenho alguma explicação disso numa conversa com o gemini.
+-> Substituir a medida de desemprego no Engemann pela usada pelo Singer
+-> Fazer meu modelo pegando o singer e o oil shock.
+
+
+----> Adicionar dados Incumbent Alaska
+-> Ajustar texto de acordo com a versão comentada pela Dani
+-> Olhar journals na área para servir de target: ver sugestões da Dani em no wpp em 14/04

@@ -10,7 +10,7 @@ library(marginaleffects)
 
 setwd("C:/Users/Joao arthur/OneDrive - Fundacao Getulio Vargas - FGV/Dissertação/Scripts-and-Databases")
 
-#rm(list=ls())
+rm(list=ls())
 
 ############### Load Data ################
 source('Scripts/R script dissertacao - Electoral Data Gubernatorial.R')
@@ -28,7 +28,6 @@ rm(list=setdiff(ls(), c("vote_state",'president_incumbent_ts'
 
 ############### Merge Column and create variables ###############
 # Merge all data into one dataframe
-str(vote_state)
 df_analysis <- vote_state[,c('state','year','incumbent_party','winner_party'
                              ,'dem_pct_votes_2pty','rep_pct_votes_2pty'
                              ,'dem_pct_2pty_change','rep_pct_2pty_change'
