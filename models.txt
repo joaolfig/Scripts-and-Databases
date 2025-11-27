@@ -1,0 +1,21 @@
+
+\begin{table}
+\begin{center}
+\begin{tabular}{l c}
+\hline
+ & Model 1 \\
+\hline
+oil\_dec\_lag & $4222.41 \; [2740.68; 5704.14]^{*}$ \\
+resrev\_lag   & $0.91 \; [   0.83;    0.99]^{*}$    \\
+\hline
+R$^2$         & $0.95$                              \\
+Adj. R$^2$    & $0.95$                              \\
+Num. obs.     & $400$                               \\
+RMSE          & $287599.92$                         \\
+\hline
+\multicolumn{2}{l}{\scriptsize{$^*$ 0 outside the confidence interval.}}
+\end{tabular}
+\caption{Statistical models}
+\label{table:coefficients}
+\end{center}
+\end{table}

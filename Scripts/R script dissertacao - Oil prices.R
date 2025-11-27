@@ -53,8 +53,13 @@ oil_deflated$oil_deflated <- round(oil_deflated$oil * oil_deflated$deflator_mult
 
 oil_deflated$log_oil_deflated <- log(oil_deflated$oil_deflated)
 
-oil_deflated$log_oil_deflated_change <- oil_deflated$log_oil_deflated - dplyr::lag(oil_deflated$log_oil_deflated, 2)
+oil_deflated$log_oil_deflated_change_l1 <- oil_deflated$log_oil_deflated - dplyr::lag(oil_deflated$log_oil_deflated, 1)
 
+oil_deflated$log_oil_deflated_change_l2 <- oil_deflated$log_oil_deflated - dplyr::lag(oil_deflated$log_oil_deflated, 2)
+
+oil_deflated$log_oil_deflated_change_l3 <- oil_deflated$log_oil_deflated - dplyr::lag(oil_deflated$log_oil_deflated, 3)
+
+oil_deflated$log_oil_deflated_change_l4 <- oil_deflated$log_oil_deflated - dplyr::lag(oil_deflated$log_oil_deflated, 4)
 
 # Aggregate oil variables
 oil_monthly <- oil %>%
@@ -121,7 +126,7 @@ oil_qtr$oil_diff_percent <- (oil_qtr$oil_qtr_avg - dplyr::lag(oil_qtr$oil_qtr_av
 oil_qtr$oil_deflated_fst_diff <- oil_qtr$oil_deflated_qtr - dplyr::lag(oil_qtr$oil_deflated_qtr)
 
 
-####Measurement of oilshock
+#### Measurement of oilshock
 m <- mean(oil_qtr$oil_deflated_fst_diff, na.rm = TRUE)
 s <- sd(oil_qtr$oil_deflated_fst_diff, na.rm = TRUE)
 
@@ -150,10 +155,17 @@ oil_qtr <- oil_qtr %>%
          oil_shock_positive_l2 = dplyr::lag(oil_shock_positive, 2),
          oil_shock_positive_l3 = dplyr::lag(oil_shock_positive, 3),
          oil_shock_positive_l4 = dplyr::lag(oil_shock_positive, 4),
+         oil_shock_positive_l5 = dplyr::lag(oil_shock_positive, 5),
          oil_shock_negative_l1 = dplyr::lag(oil_shock_negative, 1),
          oil_shock_negative_l2 = dplyr::lag(oil_shock_negative, 2),
          oil_shock_negative_l3 = dplyr::lag(oil_shock_negative, 3),
-         oil_shock_negative_l4 = dplyr::lag(oil_shock_negative, 4))
+         oil_shock_negative_l4 = dplyr::lag(oil_shock_negative, 4),
+         oil_shock_negative_l5 = dplyr::lag(oil_shock_negative, 5))
+
+# Scale all variables with oil_shock_ in the name
+oil_qtr <- oil_qtr %>%
+  mutate(across(starts_with("oil_shock_"), ~ scale(.)[,1]))
+
 
 oil_qtr <- oil_qtr %>%
   mutate(oil_qtr_avg_l1 = dplyr::lag(oil_qtr_avg, 1),

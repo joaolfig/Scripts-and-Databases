@@ -58,6 +58,14 @@ vote_state$winner_party <- ifelse(vote_state$democratic_raw_votes > vote_state$r
 # Incumbent Party
 vote_state$incumbent_party <- sub(" .*", "", vote_state$seat_status)
 
+vote_state$seat_status_other <- sub("^[^ ]+ ?", "", vote_state$seat_status)
+
+# 1 if Incumbent
+vote_state$incumbent_candidate_dm <- ifelse(vote_state$seat_status_other == "Incumbent", 1, 0)
+  
+  #unique values in vote_state$seat_status_other
+  unique(vote_state$seat_status_other)
+
 # vote_state <- vote_state %>%
 #   group_by(state) %>%
 #   mutate(incumbent_party = lag(winner_party)) 
@@ -79,27 +87,27 @@ vote_state$reelection_candidate <- ifelse(vote_state$winner_candidate == vote_st
 
 # Dummies indicating whether incumbent and challenger are trying re-election
 vote_state$incumbent_running <- ifelse( vote_state$incumbent != 'None' &
-                                        (vote_state$incumbent == vote_state$dem_nominee
-                                       |vote_state$incumbent == vote_state$rep_nominee), 1, 0)
+                                          (vote_state$incumbent == vote_state$dem_nominee
+                                           |vote_state$incumbent == vote_state$rep_nominee), 1, 0)
 
 vote_state <- vote_state %>%
   group_by(state) %>%
   mutate(challenger_running =
-    (dem_nominee != 'None' & rep_nominee != 'None') &
-    ((dem_nominee != incumbent) & (dem_nominee == lag(dem_nominee))
-    | (rep_nominee != incumbent) & (rep_nominee == lag(rep_nominee))))
+           (dem_nominee != 'None' & rep_nominee != 'None') &
+           ((dem_nominee != incumbent) & (dem_nominee == lag(dem_nominee))
+            | (rep_nominee != incumbent) & (rep_nominee == lag(rep_nominee))))
 
 vote_state$challenger_running <- as.integer(vote_state$challenger_running)
 
 #Variable of % two-party vote on the incumbent party
 vote_state$incumbent_pct_2pty <- ifelse(vote_state$incumbent_party == 'Democratic'
-                                         ,vote_state$dem_pct_votes_2pty
-                                         ,vote_state$rep_pct_votes_2pty)
+                                        ,vote_state$dem_pct_votes_2pty
+                                        ,vote_state$rep_pct_votes_2pty)
 
 #Variable of % two-party vote on the incumbent party
 vote_state$incumbent_pct_tot <- ifelse(vote_state$incumbent_party == 'Democratic'
-                                        ,vote_state$dem_pct_votes_tot
-                                        ,vote_state$rep_pct_votes_tot)
+                                       ,vote_state$dem_pct_votes_tot
+                                       ,vote_state$rep_pct_votes_tot)
 
 # Percentage (pct) change in votes in the party from one election to another
 vote_state <- vote_state %>%
@@ -111,21 +119,31 @@ vote_state <- vote_state %>%
   mutate(rep_pct_2pty_change = (rep_pct_votes_2pty - lag(rep_pct_votes_2pty)))
 
 vote_state$incumbent_pct_2pty_change <- ifelse(vote_state$incumbent_party == 'Democratic'
-                                        ,vote_state$rep_pct_2pty_change
-                                        ,vote_state$rep_pct_2pty_change)
+                                               ,vote_state$rep_pct_2pty_change
+                                               ,vote_state$rep_pct_2pty_change)
 
 
 ############### FILTERING AS IN WOLFERS (2007)
 vote_state <- vote_state %>%
   filter(year >= 1948) %>%
-# filter(year <= 1997) %>%
-  filter(dem_pct_votes_tot + rep_pct_votes_tot > .8) %>%
-  filter(dem_pct_votes_tot >!.8 & rep_pct_votes_tot >!.8) %>%
+  #filter(year <= 1997) %>%
+  #filter(dem_pct_votes_tot + rep_pct_votes_tot > .8) %>%
+  # filter(dem_pct_votes_tot >!.8 & rep_pct_votes_tot >!.8) %>%
   filter(dem_nominee != 'None' & rep_nominee != 'None') %>%
   filter(!is.na(dem_nominee) & !is.na(rep_nominee)) %>%
   filter(incumbent_party == 'Democratic' | incumbent_party == 'Republican')  
 # I still gotta filter special elections, but I'm not sure what they are
 
+# vote_state %>%
+#   #filter if election ID contains LA,NM,ND,MT,OK,TX,WY
+#   filter(grepl("LA|NM|ND|MT|OK|TX|WY", election_id)) %>%
+#   filter(dem_pct_votes_tot + rep_pct_votes_tot < .8) %>%
+#   arrange(election_id)
+
+# vote_state %>%
+#   #filter if election ID contains LA,NM,ND,MT,OK,TX,WY
+#   filter(grepl("LA|NM|ND|MT|OK|TX|WY", election_id)) %>%
+#   filter(dem_pct_votes_tot + rep_pct_votes_tot < .8)
 
 #filter unqiue values in gov_elections$seat_status
 #unique(gov_elections$seat_status)
@@ -133,4 +151,3 @@ vote_state <- vote_state %>%
 
 
 #List of special elections: https://en.wikipedia.org/wiki/Category:United_States_gubernatorial_special_elections
-
